@@ -20,7 +20,7 @@ def generate_launch_description():
     fast_lio_config_path = os.path.join(real_nav_package_path, 'config')
 
     urdf_path = get_package_share_directory('rm_bnrobot_sim')
-    model_path = urdf_path + '/urdf/bngu_sentinel/bnbot_real.urdf'
+    model_path = urdf_path + '/urdf/bngu_sentinel/bnbot_real.xacro'
 
 
     mode_arg_path = launch.actions.DeclareLaunchArgument(
@@ -97,8 +97,8 @@ def generate_launch_description():
                     'base_link_frame_id': 'base_link',  
                     
                     
-                    'extrinsic_T': [0.0, 0.0, 0.0],     
-                    'extrinsic_R': [0.0, 0.0, 0.0, 1.0], #
+                    #'extrinsic_T': [0.0, 0.0, 0.0],     
+                    #'extrinsic_R': [0.0, 0.0, 0.0, 1.0], #
              
                     
                     # 5. 其他辅助参数

@@ -17,12 +17,25 @@
     
     <!-- 传感器 -->
     <xacro:laser_xacro xyz="0 0 0.105" />
-    <xacro:imu_xacro xyz="0 0 0.02" /> 
+    <!-- 1. Mid360: 相对于base_link的位姿 (extrinsic_T + extrinsic_R) -->
+    <xacro:mid360 name="mid360_laser" topic="/mid360/pointcloud">
+        
+        <origin xyz="0 0 0.6" rpy="${M_PI} 0 ${M_PI/2}" />
+    </xacro:mid360>
+
+    <!-- 2. IMU: 挂载到mid360_laser_link (而非base_link)，使用相对位姿 -->
+    <joint name="imu_to_mid360_joint" type="fixed">
+        <parent link="mid360_laser_link" />  <!-- Mid360的link名称，需和mid360.urdf.xacro一致 -->
+        <child link="imu_link" />             <!-- IMU的link名称，需和imu.urdf.xacro一致 -->
+        <origin xyz="-0.011 -0.02329 0.04412" rpy="0 0 0" />  <!-- IMU相对于Mid360的位姿 -->
+        <axis xyz="0 0 0" />
+    </joint>
+    <!-- <xacro:imu_xacro xyz="0 0 0.02" /> -->
     <!-- <xacro:imu_xacro xyz="0 0 0.02" /> -->
     <!-- <xacro:imu_xacro xyz="0 0 0.02" /> -->
     
     <!-- <xacro:camera_xacro xyz="0.10 0 0.45" /> --> 
-    <xacro:mid360 name="mid360_laser" topic="/mid360/pointcloud"> <origin xyz="0.2665 0.0 0.145" rpy="0 0 0" /></xacro:mid360> 
+    <!-- <xacro:mid360 name="mid360_laser" topic="/mid360/pointcloud"> <origin xyz="0.2665 0.0 0.145" rpy="0 0 0" /></xacro:mid360> -->
     <!-- 麦克纳姆轮配置，保持原有轮距参数 -->
 
     <xacro:wheel_xacro wheel_name="front_left" xyz="0.235 -0.235 -0.105" yaw="0.7854" axis="-1 1 0" />

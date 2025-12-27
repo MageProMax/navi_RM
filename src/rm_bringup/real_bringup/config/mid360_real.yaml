@@ -31,9 +31,9 @@
             fov_degree:    360.0
             det_range:     100.0
             extrinsic_est_en:  true      # true: enable the online estimation of IMU-LiDAR extrinsic
-            extrinsic_T: [ -0.011, -0.02329, 0.04412 ]
-            extrinsic_R: [ 0., -1., 0.,
-                            1., 0., 0.,
+            extrinsic_T: [ -0.011, -0.02329, 0.6412 ]
+            extrinsic_R: [ 1., 0., 0.,
+                            0., 1., 0.,
                             0., 0., 1.]
 
         publish:
@@ -44,7 +44,7 @@
             dense_publish_en: false      # false: low down the points number in a global-frame point clouds scan.
             scan_bodyframe_pub_en: true  # true: output the point cloud scans in IMU-body-frame
             odom_en: true             # 重点：启用/odom话题发布（满足导航等下游节点需求）
-            odom_topic: "/Odometry"       # 自定义odom话题名（默认即可，与下游节点一致）
+            odom_topic: "odom"       # 自定义odom话题名（默认即可，与下游节点一致）
             odom_frame_id: "odom"     # odom坐标系（与机器人TF树一致，如base_footprint→base_link→odom）
             base_link_frame_id: "base_link" # 机器人底座坐标系（必须与你的URDF/TF树中的base_link一致）
 

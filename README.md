@@ -43,6 +43,14 @@ sudo apt install ros-humble-robot-localization
 sudo apt install ros-humble-pointcloud-to-laserscan
 ```
 
+3. jetson 源码编译gazebo_ros_pkgs
+https://classic.gazebosim.org/tutorials?tut=ros2_installing&cat=connect_ros
+编译pulginp时可能会出现.h文件和.hpp文件的冲突，主要是jetson的tf2文件夹下没有.hpp文件.按照报错提示vim将.hpp文件修改成.h文件即可
+```
+source /home/jetson/self_gazebo/install/setup.bash
+source /home/jetson/navi_RM/install/setup.bash
+```
+
 ## 2.2 接口
 | Topic name | Type | Note |
 |---|---|---|
@@ -59,6 +67,15 @@ sudo apt install ros-humble-pointcloud-to-laserscan
 - ros2 launch livox_ros_driver2 msg_MID360_launch.py    # 启动雷达
 - ros2 launch real_bringup real_nav.launch.py           # 启动导航
 - ros2 run can_control can_control                      # 启动下发节点
+```
+1.1 使用map2.yaml参数
+```
+ros2 launch real_bringup real_nav.launch.py map:=/home/jetson/navi_RM/src/rm_bnrobot_nav/maps/maps2.yaml
+ros2 launch real_bringup real_nav.launch.py map:=/home/jetson/navi_RM/src/rm_bnrobot_nav/maps/classroom.yaml
+```
+1.2 标点
+```
+ros2 topic echo /clicked_point
 ```
 
 ### 2.单独启动
