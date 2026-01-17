@@ -1,0 +1,17 @@
+<package format="3">
+  <name>can_twist</name>
+  <version>0.0.1</version>
+  <description>Handle Twist command and CAN communication for robot chassis</description>
+  <maintainer email="23721025@bjtu.edu.cn">Light12318</maintainer>
+  <license>Apache License 2.0</license>
+
+  <!-- 构建工具依赖 -->
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <!-- ROS2功能包依赖 -->
+  <depend>rclcpp</depend>
+  <depend>geometry_msgs</depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>
