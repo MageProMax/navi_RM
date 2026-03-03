@@ -40,7 +40,7 @@ amcl:   #负责定位的
     scan_topic: scan
     # 以下是新增的 IMU 配置（让 AMCL 订阅 /imu）
     use_imu: True  # 关键：启用 IMU 辅助定位
-    imu_topic: "/imu"  # 你的 IMU 话题名（必须和实际发布的一致）
+    imu_topic: "/livox/imu"  # 你的 IMU 话题名（必须和实际发布的一致）
     imu_angular_velocity_stddev: 0.01  # IMU 角速度噪声（根据硬件调整，比如 0.001~0.1）
     imu_linear_acceleration_stddev: 0.1  # IMU 线加速度噪声（不用可以设大些）
 

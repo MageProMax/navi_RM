@@ -67,6 +67,10 @@ source /home/jetson/navi_RM/install/setup.bash
 - ros2 launch livox_ros_driver2 msg_MID360_launch.py    # 启动雷达
 - ros2 launch real_bringup real_nav.launch.py           # 启动导航
 - ros2 run can_control can_control                      # 启动下发节点
+- ros2 run rm_bnrobot_function get_pose.py 
+- ros2 launch rm_plan sentry_test.launch.py 
+- ros2 run rm_bnrobot_function nav_pose 
+
 ```
 1.1 使用map2.yaml参数
 ```
