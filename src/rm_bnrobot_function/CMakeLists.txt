@@ -20,6 +20,7 @@ find_package(Qt5 REQUIRED COMPONENTS Widgets)
 find_package(OpenCV)
 
 add_executable(nav_pose src/nav_pose.cpp)
+ament_target_dependencies(nav_pose rm_interfaces rclcpp)
 add_executable(displayPose src/displayPose.cpp)
 
 ament_target_dependencies(displayPose rm_interfaces rclcpp)
