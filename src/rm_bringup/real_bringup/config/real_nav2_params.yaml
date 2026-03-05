@@ -23,8 +23,8 @@ amcl:   #负责定位的
     odom_frame_id: "odom"
     pf_err: 0.05
     pf_z: 0.99
-    recovery_alpha_fast: 0.0
-    recovery_alpha_slow: 0.0
+    recovery_alpha_fast: 0.1
+    recovery_alpha_slow: 0.01
     resample_interval: 1
     robot_model_type: "nav2_amcl::OmniMotionModel"  # 适配万向轮全向运动
     save_pose_rate: 0.5
@@ -38,11 +38,7 @@ amcl:   #负责定位的
     z_rand: 0.1  # 降低噪声权重（减少旋转导致的定位漂移）
     z_short: 0.05
     scan_topic: scan
-    # 以下是新增的 IMU 配置（让 AMCL 订阅 /imu）
-    use_imu: True  # 关键：启用 IMU 辅助定位
-    imu_topic: "/livox/imu"  # 你的 IMU 话题名（必须和实际发布的一致）
-    imu_angular_velocity_stddev: 0.01  # IMU 角速度噪声（根据硬件调整，比如 0.001~0.1）
-    imu_linear_acceleration_stddev: 0.1  # IMU 线加速度噪声（不用可以设大些）
+
 
 bt_navigator:
   ros__parameters:
@@ -151,7 +147,7 @@ controller_server:
       min_vel_y: -1.01
       max_vel_x: 1.01
       max_vel_y: 1.01
-      max_vel_theta: 0.8  # 启用主动旋转角速度（原0.0→0.8，可按云台性能调整）
+      max_vel_theta: 0.0  
       min_speed_xy: 0.0
       max_speed_xy: 1.5
       min_speed_theta: 0.0
@@ -159,10 +155,10 @@ controller_server:
       # https://github.com/ROBOTIS-GIT/turtlebot3_simulations/issues/75
       acc_lim_x: 2.5
       acc_lim_y: 2.5
-      acc_lim_theta: 0.6  # 启用旋转加速度（原0.0→0.6，避免急转）
+      acc_lim_theta: 0.0  # 启用旋转加速度（原0.0→0.6，避免急转）
       decel_lim_x: -2.5
       decel_lim_y: -2.5
-      decel_lim_theta: -0.6  # 启用旋转减速度
+      decel_lim_theta: 0.0  # 启用旋转减速度
       vx_samples: 30
       vy_samples: 25
       vtheta_samples: 12  # 增加旋转速度采样点（原1→12，覆盖旋转+XY组合）
@@ -175,14 +171,14 @@ controller_server:
       short_circuit_trajectory_evaluation: True
       stateful: True
       critics: ["RotateToGoal", "Oscillation", "BaseObstacle", "GoalAlign", "PathAlign", "PathDist", "GoalDist"]
-      BaseObstacle.scale: 0.08  # 提高避障权重（被动旋转时防碰撞，原0.02→0.08）
+      BaseObstacle.scale: 5.0  # 提高避障权重（被动旋转时防碰撞，原0.02→0.08）
       PathAlign.scale: 32.0
       PathAlign.forward_point_distance: 0.8  # 提前预判路径（原0.1→0.4，适配旋转）
-      GoalAlign.scale: 24.0
+      GoalAlign.scale: 0.0
       GoalAlign.forward_point_distance: 0.1
       PathDist.scale: 32.0
       GoalDist.scale: 24.0
-      RotateToGoal.scale: 15.0  # 降低旋转到目标权重（避免与被动旋转冲突，原32→15）
+      RotateToGoal.scale: 0.0  # 降低旋转到目标权重（避免与被动旋转冲突，原32→15）
       RotateToGoal.slowing_factor: 5.0
       RotateToGoal.lookahead_time: -1.0
 
