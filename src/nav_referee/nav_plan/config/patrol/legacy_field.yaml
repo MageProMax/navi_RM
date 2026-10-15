@@ -1,0 +1,11 @@
+# Original hardcoded field coordinates, retained as a migration example.
+# These have NOT been validated against custom_room or any current field map.
+# Set the matching 2D/PCD maps and verify all points before selecting this file.
+nav_plan_node:
+  ros__parameters:
+    health_threshold: 0.25
+    waypoints:
+      recovery: [-3.06, 2.79, 0.0]
+      occupy: [0.0, 0.0, 0.0]
+      attack: [0.0, 0.0, 0.0]
+      defend: [0.0, 0.0, 0.0]

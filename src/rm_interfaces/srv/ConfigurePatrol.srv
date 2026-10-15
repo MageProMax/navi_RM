@@ -1,0 +1,12 @@
+# Load a route without starting motion. mode: formal, test, manual, explore, explore_goal.
+# explore_goal requires one map-frame destination; Nav2 receives safe intermediate goals.
+string mode
+string frame_id
+bool loop
+float64 wait_seconds
+float64 health_threshold
+string[] point_names
+Goal[] points
+---
+bool success
+string message

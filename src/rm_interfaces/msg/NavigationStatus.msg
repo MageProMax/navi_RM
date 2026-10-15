@@ -1,0 +1,11 @@
+string mode
+string state
+string message
+bool paused
+bool active
+bool emergency_stop
+uint32 point_index
+uint32 point_count
+string point_name
+Goal target
+float64 distance_remaining

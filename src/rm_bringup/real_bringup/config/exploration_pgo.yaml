@@ -1,0 +1,24 @@
+online_pgo:
+  ros__parameters:
+    key_pose_delta_trans: 0.20
+    key_pose_delta_deg: 10.0
+    loop_search_radius: 2.5
+    loop_time_threshold: 15.0
+    loop_min_path_length: 4.0
+    loop_min_index_separation: 15
+    loop_confirmations: 2
+    loop_interval: 10.0
+    loop_submap_half_range: 5
+    submap_resolution: 0.10
+    # MSE in m^2, inlier distance in metres; these need real bag validation.
+    loop_score_threshold: 0.02
+    loop_correspondence_distance: 0.5
+    loop_min_inlier_ratio: 0.65
+    loop_max_translation: 1.0
+    loop_max_rotation: 0.261799
+    maximum_keyframes: 3000
+    map_update_interval: 1.0
+    resolution: 0.05
+    min_ground_height: -0.15
+    min_obstacle_height: 0.10
+    max_obstacle_height: 1.50

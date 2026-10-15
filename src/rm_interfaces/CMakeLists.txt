@@ -10,7 +10,12 @@ find_package(ament_cmake REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
 rosidl_generate_interfaces(${PROJECT_NAME}
   "srv/Simple.srv"
+  "srv/ConfigurePatrol.srv"
+  "msg/NavigationStatus.msg"
   "msg/Goal.msg"
+  "msg/GamePara.msg"
+  "msg/OwnPara.msg"
+  "msg/AllyPara.msg"
 )
 
 if(BUILD_TESTING)

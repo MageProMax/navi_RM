@@ -17,6 +17,14 @@
 
   <depend>rclcpp</depend>
   <depend>rclcpp_action</depend>
+  <depend>tf2_ros</depend>
+  <depend>std_msgs</depend>
+  <depend>std_srvs</depend>
+  <exec_depend>nav_msgs</exec_depend>
+  <exec_depend>python3-pyqt5</exec_depend>
+  <exec_depend>python3-yaml</exec_depend>
+  <exec_depend>python3-numpy</exec_depend>
+  <exec_depend>ament_index_python</exec_depend>
   <depend>nav2_msgs</depend>
   <depend>rm_interfaces</depend>
 

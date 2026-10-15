@@ -1,0 +1,32 @@
+{
+  "source_world": "/home/mage/navigation/nav_rm_final/src/rm_bnrobot_sim/world/custom_room.world",
+  "world_sha256": "370ca05101580941e53678b9b5542a550585df6fbb43770246b3687b076c8514",
+  "method": "SDF collision geometry; world axes equal map axes",
+  "frame": "map",
+  "surface_spacing_m": 0.025,
+  "resolution_m": 0.05,
+  "origin": [
+    -11.0,
+    -7.1000000000000005,
+    0.0
+  ],
+  "size_pixels": [
+    401,
+    248
+  ],
+  "collision_solids": 64,
+  "pcd_points": 983444,
+  "obstacle_height_band_m": [
+    0.1,
+    1.5
+  ],
+  "pcd_obstacle_points_in_occupied_cells": 503493,
+  "pcd_obstacle_projection_agreement": 1.0,
+  "occupied_cells": 9924,
+  "free_cells": 76190,
+  "spawn_xy": [
+    -1.96,
+    -1.85
+  ],
+  "spawn_cell_free": true
+}

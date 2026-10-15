@@ -5,7 +5,7 @@
             <plugin name='mecanum_controller' filename='libgazebo_ros_planar_move.so'>
                 <ros>
                     <namespace>/</namespace>
-                    <remapping>cmd_vel:=cmd_vel</remapping>
+                    <remapping>cmd_vel:=$(arg cmd_vel_topic)</remapping>
                     <remapping>odom:=odom</remapping>
                 </ros>
                 <update_rate>100</update_rate>
@@ -30,7 +30,8 @@
                 <publish_odom>true</publish_odom>
                 <publish_odom_tf>false</publish_odom_tf>
                 <odometry_frame>odom</odometry_frame>
-                <robot_base_frame>base_footprint</robot_base_frame>
+                <!-- odom -> base_link 由 FAST-LIO 发布，Gazebo 只发布里程计消息。 -->
+                <robot_base_frame>base_link</robot_base_frame>
             </plugin>
         </gazebo>
    </xacro:macro>

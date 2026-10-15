@@ -95,7 +95,7 @@
           <pose>0 0 0 -1.5705 0 0</pose>
           <geometry>
             <mesh>
-              /home/mage2/Desktop/try2/navi_RM/src/bnbot_description/meshes/RMUL2024_world/meshes/RMUL_2024.stl
+              <uri>model://RMUL2024_world/meshes/RMUL_2024.stl</uri>
               <scale>0.001 0.001 0.001</scale>
             </mesh>
           </geometry>
@@ -122,7 +122,7 @@
           <pose>0 0 0 -1.5705 0 0</pose>
           <geometry>
             <mesh>
-              /home/mage2/Desktop/try2/navi_RM/src/bnbot_description/meshes/RMUL2024_world/meshes/RMUL_2024.stl
+              <uri>model://RMUL2024_world/meshes/RMUL_2024.stl</uri>
               <scale>0.001 0.001 0.001</scale>
             </mesh>
           </geometry>

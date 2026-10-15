@@ -8,6 +8,16 @@ endif()
 # find dependencies
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
+find_package(nav2_lifecycle_manager REQUIRED)
+find_package(nav2_util REQUIRED)
+find_package(nav2_msgs REQUIRED)
+find_package(std_srvs REQUIRED)
+find_package(bondcpp REQUIRED)
+find_package(diagnostic_updater REQUIRED)
+add_executable(lifecycle_manager_resilient src/lifecycle_manager_resilient.cpp)
+target_include_directories(lifecycle_manager_resilient PRIVATE ${nav2_lifecycle_manager_INCLUDE_DIRS})
+ament_target_dependencies(lifecycle_manager_resilient rclcpp nav2_util nav2_msgs std_srvs bondcpp diagnostic_updater)
+install(TARGETS lifecycle_manager_resilient DESTINATION lib/${PROJECT_NAME})
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
@@ -20,7 +30,9 @@ if(BUILD_TESTING)
   set(ament_cmake_cpplint_FOUND TRUE)
   ament_lint_auto_find_test_dependencies()
 endif()
-install(DIRECTORY config launch 
+install(DIRECTORY behavior_trees config launch rviz
 DESTINATION share/${PROJECT_NAME})
+
+install(PROGRAMS scripts/accumulated_scan.py scripts/spin_navigation_adapter.py scripts/sim_can_bridge.py scripts/frontier_explorer.py scripts/frontier_planner.py DESTINATION lib/${PROJECT_NAME})
 
 ament_package()

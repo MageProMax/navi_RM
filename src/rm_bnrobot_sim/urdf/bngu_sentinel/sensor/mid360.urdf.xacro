@@ -11,9 +11,11 @@
   <!-- 激光雷达性能参数（匹配硬件规格） -->
   <xacro:property name="laser_min_range" value="0.1" /> <!-- 最小探测距离（m） -->
   <xacro:property name="laser_max_range" value="200.0" /> <!-- 最大探测距离（m） -->
-  <xacro:property name="laser_update_rate" value="20" /> <!-- 刷新频率（Hz），Mid360最大支持20Hz -->
-  <xacro:property name="horizontal_samples" value="300" /> <!-- 水平采样数（越多数据越密） -->
-  <xacro:property name="vertical_samples" value="64" /> <!-- 垂直采样数（Mid360实际为64线） -->
+  <xacro:property name="laser_update_rate" value="10" /> <!-- 与实机驱动默认 publish_freq=10 Hz 一致。 -->
+  <!-- Gazebo ray casting is much heavier than the real sensor. This density
+       preserves the Mid-360 scan pattern while keeping the GUI responsive. -->
+  <xacro:property name="horizontal_samples" value="150" />
+  <xacro:property name="vertical_samples" value="32" />
   <xacro:property name="horizontal_min_angle" value="0" /> <!-- 水平最小角度（弧度） -->
   <xacro:property name="horizontal_max_angle" value="${2*M_PI}" /> <!-- 水平最大角度（360°） -->
   <xacro:property name="vertical_min_angle" value="${-7.22/180*M_PI}" /> <!-- 垂直最小角度（-7.22°） -->
@@ -21,17 +23,17 @@
   <xacro:property name="laser_resolution" value="0.002" /> <!-- 距离分辨率（m） -->
   <xacro:property name="noise_mean" value="0.0" /> <!-- 噪声均值 -->
   <xacro:property name="noise_stddev" value="0.002" /> <!-- 噪声标准差 -->
-  <xacro:property name="downsample_rate" value="2" /> <!-- 降采样系数（2=每2个点保留1个） -->
+  <xacro:property name="downsample_rate" value="8" /> <!-- 每 20000 个扫描位置保留 2500 条射线，避免只截取短段垂直扫描。 -->
 
 
   <!-- 2. 雷达模型-->
-  <xacro:macro name="mid360" params=" name:='mid360_laser' parent:='base_link' topic:='/mid360/pointcloud' *origin">
+  <xacro:macro name="mid360" params="name:='mid360' parent:='base_link' topic:='/livox/lidar' *origin">
     <link name="${name}">
       <visual>
         <!-- 雷达自身坐标系到link的偏移-->
         <origin xyz="0.025 -0.0265 -0.025" rpy="${M_PI/2} 0 ${M_PI}"/>
         <geometry>
-          <mesh filename="file:///home/mage/navigation/nav_RM_4/src/rm_bnrobot_sim/meshes/mid360.stl" scale="0.0008 0.0008 0.0008"/>
+          <mesh filename="file://$(find rm_bnrobot_sim)/meshes/mid360.stl" scale="0.0008 0.0008 0.0008"/>
         </geometry>
         <material name="black">
           <color rgba="0.8 0.8 0.8 0.8"/> 
@@ -65,12 +67,15 @@
       <sensor type="ray" name="${name}">
         <!-- <pose>0 0 0 0 0 0</pose>  -->
         <pose>0.0 0.0 0.0 0 0</pose><!-- 传感器自身在link中的姿态（无偏移） -->
-        <visualize>true</visualize> <!-- 在Gazebo中显示扫描线（调试用） -->
+        <always_on>true</always_on>
+        <!-- Thousands of rendered rays can make gzclient consume several GB. -->
+        <visualize>false</visualize>
         <update_rate>${laser_update_rate}</update_rate> <!-- 刷新频率 -->
         
         <!-- 6. Livox雷达插件（发布点云数据） -->
         <plugin name="${name}_plugin" filename="libros2_livox.so">  
-          <simulate>true</simulate> 
+          <simulate>true</simulate>
+          <frame_name>livox_frame</frame_name> 
   
 
           <ray>
@@ -106,9 +111,11 @@
           
 
           <visualize>false</visualize> <!-- 点云可视化由RViz负责，Gazebo中关闭 -->
-          <samples>${horizontal_samples * vertical_samples}</samples> <!-- 总采样数 -->
+          <!-- Advance a complete 0.1 s pattern interval, retaining about the same
+               ray count as before (2500 instead of 2400). -->
+          <samples>20000</samples>
           <downsample>${downsample_rate}</downsample> <!-- 降采样 -->
-          <csv_file_name>$(find rm_bnrobot_sim)/scan_mode/mid360.csv</csv_file_name> 扫描模式配置文件
+          <csv_file_name>$(find rm_bnrobot_sim)/scan_mode/mid360.csv</csv_file_name>
           <topic>${topic}</topic> <!-- 点云发布话题 -->
         </plugin>
       </sensor>

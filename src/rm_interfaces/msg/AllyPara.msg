@@ -1,0 +1,4 @@
+uint16 ally_1_robot_hp
+uint16 ally_3_robot_hp
+uint8 level
+uint8 offending_robot_id

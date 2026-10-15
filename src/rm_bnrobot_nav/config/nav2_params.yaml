@@ -6,7 +6,7 @@ amcl:   #负责定位的
     alpha3: 0.2
     alpha4: 0.2
     alpha5: 0.2
-    base_frame_id: "base_footprint"
+    base_frame_id: "base_link"
     beam_skip_distance: 0.5
     beam_skip_error_threshold: 0.9
     beam_skip_threshold: 0.3
@@ -378,7 +378,7 @@ velocity_smoother:
 #     alpha3: 0.2
 #     alpha4: 0.2
 #     alpha5: 0.2
-#     base_frame_id: "base_footprint"
+#     base_frame_id: "base_link"
 #     beam_skip_distance: 0.5
 #     beam_skip_error_threshold: 0.9
 #     beam_skip_threshold: 0.3
@@ -733,7 +733,7 @@ velocity_smoother:
 #     alpha3: 0.2
 #     alpha4: 0.2
 #     alpha5: 0.2
-#     base_frame_id: "base_footprint"
+#     base_frame_id: "base_link"
 #     beam_skip_distance: 0.5
 #     beam_skip_error_threshold: 0.9
 #     beam_skip_threshold: 0.3
@@ -1058,4 +1058,3 @@ velocity_smoother:
 #     odom_duration: 0.1
 #     deadband_velocity: [0.0, 0.0, 0.0]
 #     velocity_timeout: 1.0
-

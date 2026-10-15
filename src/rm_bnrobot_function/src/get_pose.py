@@ -22,7 +22,7 @@ class TFListener(Node):
     def get_transform(self):
         try:
             tf = self.buffer.lookup_transform(
-                'map', 'base_footprint', rclpy.time.Time(seconds=0), rclpy.time.Duration(seconds=1))
+                'map', 'base_link', rclpy.time.Time(seconds=0), rclpy.time.Duration(seconds=1))
             transform = tf.transform
 
             msg = Goal()

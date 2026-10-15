@@ -1,0 +1,96 @@
+#pragma once
+#include "commons.h"
+#include <pcl/kdtree/kdtree_flann.h>
+#include <pcl/common/transforms.h>
+#include <pcl/filters/voxel_grid.h>
+#include <pcl/registration/gicp.h>
+#include <gtsam/geometry/Rot3.h>
+#include <gtsam/geometry/Pose3.h>
+#include <gtsam/nonlinear/ISAM2.h>
+#include <gtsam/nonlinear/Values.h>
+#include <gtsam/slam/PriorFactor.h>
+#include <gtsam/slam/BetweenFactor.h>
+#include <gtsam/nonlinear/NonlinearFactorGraph.h>
+
+struct KeyPoseWithCloud
+{
+    M3D r_local;
+    V3D t_local;
+    M3D r_global;
+    V3D t_global;
+    double time;
+    CloudType::Ptr body_cloud;
+};
+struct LoopPair
+{
+    size_t source_id;
+    size_t target_id;
+    M3D r_offset;
+    V3D t_offset;
+    double score;
+};
+
+struct Config
+{
+    double key_pose_delta_deg = 10;
+    double key_pose_delta_trans = 1.0;
+    double loop_search_radius = 1.0;
+    double loop_time_tresh = 60.0;
+    double loop_score_tresh = 0.15;
+    int loop_submap_half_range = 5;
+    double submap_resolution = 0.1;
+    double min_loop_detect_duration = 10.0;
+    double loop_correspondence_distance = 0.5;
+    double loop_min_inlier_ratio = 0.65;
+    double loop_max_translation = 1.0;
+    double loop_max_rotation = 0.261799;
+    double loop_min_path_length = 4.0;
+    int loop_min_index_separation = 15;
+    int loop_confirmations = 2;
+    double odom_translation_sigma = 0.03;
+    double odom_rotation_sigma = 0.02;
+    double loop_translation_sigma = 0.02;
+    double loop_rotation_sigma = 0.01;
+    bool planar_graph = false;
+};
+
+class SimplePGO
+{
+public:
+    SimplePGO(const Config &config);
+
+    bool isKeyPose(const PoseWithTime &pose);
+
+    bool addKeyPose(const CloudWithPose &cloud_with_pose);
+
+    bool hasLoop(){return m_cache_pairs.size() > 0;}
+
+    void searchForLoopPairs();
+    const std::string &loopStatus() const { return m_loop_status; }
+    double lastInlierRatio() const { return m_last_inlier_ratio; }
+
+    void smoothAndUpdate();
+
+    CloudType::Ptr getSubMap(int idx, int half_range, double resolution, int upper_bound = -1);
+    std::vector<std::pair<size_t, size_t>> &historyPairs() { return m_history_pairs; }
+    std::vector<KeyPoseWithCloud> &keyPoses() { return m_key_poses; }
+
+    M3D offsetR() { return m_r_offset; }
+    V3D offsetT() { return m_t_offset; }
+
+private:
+    Config m_config;
+    std::vector<KeyPoseWithCloud> m_key_poses;
+    std::vector<std::pair<size_t, size_t>> m_history_pairs;
+    std::vector<LoopPair> m_cache_pairs;
+    M3D m_r_offset;
+    V3D m_t_offset;
+    std::shared_ptr<gtsam::ISAM2> m_isam2;
+    gtsam::Values m_initial_values;
+    gtsam::NonlinearFactorGraph m_graph;
+    pcl::GeneralizedIterativeClosestPoint<PointType, PointType> m_icp;
+    std::string m_loop_status = "waiting_history";
+    double m_last_inlier_ratio = 0.0;
+    int m_pending_target = -1, m_pending_count = 0;
+    M4F m_pending_correction = M4F::Identity();
+};

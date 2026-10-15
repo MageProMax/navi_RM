@@ -1,0 +1,6 @@
+uint8 game_progress
+uint16 stage_remain_time
+uint8 recovery_occupy
+uint8 mid_occupy
+uint8 recovery_rfid
+uint8 mid_rfid

@@ -6,7 +6,8 @@
                 <plugin name="laserscan" filename="libgazebo_ros_ray_sensor.so">
                     <ros>
                         <namespace>/</namespace>
-                        <remapping>~/out:=scan</remapping>
+                        <!-- 保留调试用 2D 雷达，避免与 Mid-360 切片的 /scan 冲突。 -->
+                        <remapping>~/out:=scan_2d_raw</remapping>
                     </ros>
                     <output_type>sensor_msgs/LaserScan</output_type>
                     <frame_name>laser_link</frame_name>
@@ -45,12 +46,12 @@
 
         
 
-<gazebo reference="imu_link">
+<gazebo reference="livox_imu">
     <sensor name="imu_sensor" type="imu">
         <plugin name="imu_plugin" filename="libgazebo_ros_imu_sensor.so">
             <ros>
                 <namespace>/</namespace>
-                <remapping>~/out:=imu</remapping>
+                <remapping>~/out:=livox/imu</remapping>
             </ros>
             <initial_orientation_as_reference>false</initial_orientation_as_reference>
         </plugin>

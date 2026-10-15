@@ -1,0 +1,8 @@
+frontier_explorer:
+  ros__parameters:
+    # At least the padded spin envelope; goals remain in known free space.
+    clearance: 0.48
+    min_frontier_cells: 8
+    min_goal_distance: 0.8
+    goal_timeout: 90.0
+    blacklist_duration: 180.0

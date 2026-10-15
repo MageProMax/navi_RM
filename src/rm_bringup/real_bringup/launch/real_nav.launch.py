@@ -4,6 +4,9 @@ import os
 from ament_index_python.packages import get_package_share_directory
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
+from launch_ros.actions import SetRemap
+from launch_ros.substitutions import FindPackageShare
+from nav2_common.launch import RewrittenYaml
 
 def generate_launch_description():
     nav_package_path = get_package_share_directory('rm_bnrobot_nav')
@@ -11,17 +14,17 @@ def generate_launch_description():
     bringup_path = get_package_share_directory('nav2_bringup')
     default_map_path = os.path.join(nav_package_path, 'maps', 'room.yaml')
     nav2_params_path = os.path.join(real_nav_package_path, 'config', 'real_nav2_params.yaml')
+    nav_to_pose_bt_path = os.path.join(
+        real_nav_package_path, 'behavior_trees', 'navigate_to_pose_no_yaw.xml')
+    nav_through_poses_bt_path = os.path.join(
+        real_nav_package_path, 'behavior_trees', 'navigate_through_poses_no_yaw.xml')
+    
     rviz2_path = os.path.join(nav_package_path, 'rviz', 'rviz2.rviz')
-    rviz2_path2 = os.path.join(real_nav_package_path, 'rviz', 'fastlio.rviz')
     
-    
-    # Fast_lio 相关路径
-    fast_lio_path = get_package_share_directory('fast_lio')
-    fast_lio_config_path = os.path.join(real_nav_package_path, 'config')
 
+    
     urdf_path = get_package_share_directory('rm_bnrobot_sim')
     model_path = urdf_path + '/urdf/bngu_sentinel/bnbot_real.xacro'
-
 
     mode_arg_path = launch.actions.DeclareLaunchArgument(
         name='model', default_value=str(model_path),
@@ -47,7 +50,7 @@ def generate_launch_description():
     declare_use_fast_lio = launch.actions.DeclareLaunchArgument(
         'use_fast_lio',
         default_value='True',
-        description='是否使用 Fast LIO 进行定位'
+        description='是否使用 Fast LIO 进行定位',
     )
     
     use_sim_arg = launch.substitutions.LaunchConfiguration('use_sim_time')
@@ -55,6 +58,15 @@ def generate_launch_description():
     param_arg = launch.substitutions.LaunchConfiguration('param_file')
     use_fast_lio_arg = launch.substitutions.LaunchConfiguration('use_fast_lio')
 
+    nav_params_no_yaw = RewrittenYaml(
+        source_file=param_arg,
+        root_key='',
+        param_rewrites={
+            'default_nav_to_pose_bt_xml': nav_to_pose_bt_path,
+            'default_nav_through_poses_bt_xml': nav_through_poses_bt_path,
+        },
+        convert_types=True,
+    )
 
     robot_description = launch_ros.parameter_descriptions.ParameterValue(
         launch.substitutions.Command(
@@ -66,127 +78,142 @@ def generate_launch_description():
     robot_state_publisher_node = launch_ros.actions.Node(
         package='robot_state_publisher',
         executable='robot_state_publisher',
-        parameters=[{'robot_description': robot_description}]
+        parameters=[{'robot_description': robot_description},
+                    {'use_sim_time': use_sim_arg}]
     )
-    
 
 
-    # Fast_lio 节点
-    fast_lio_node = None
-    if fast_lio_path:
-        fast_lio_node = launch_ros.actions.Node(
-            package='fast_lio',
-            executable='fastlio_mapping',
-            name='fast_lio',  
-            output='screen',
-            parameters=[
-                PathJoinSubstitution([fast_lio_config_path, 'mid360_real.yaml']), 
-                {
-                    # 1. 时间配置
-                    'use_sim_time': use_sim_arg,
-                    'use_system_time': False,
-                    
-                    'publish_frame_id': 'map',         
-                    'child_frame_id': 'base_link',       
-                    'publish_tf': True,                
-                    
-                    # 3. 里程计发布
-                    'publish_odom': True,               
-                    'odom_topic': '/odom',               
-                    'odom_frame_id': 'map',             
-                    'base_link_frame_id': 'base_link',  
-                    
-                    
-                    #'extrinsic_T': [0.0, 0.0, 0.0],     
-                    #'extrinsic_R': [0.0, 0.0, 0.0, 1.0], #
-             
-                    
-                    # 5. 其他辅助参数
-                    'publish_rate': 50.0,                # TF/里程计发布频率
-                }
-            ],
-            remappings=[
-        
-            ],
-            condition=launch.conditions.IfCondition(use_fast_lio_arg)
-        )
+    fastlio2_config_path = PathJoinSubstitution(
+        [FindPackageShare("fastlio2"), "config", "lio.yaml"]
+    )
+
+    fast_lio_node = launch_ros.actions.Node(
+        package="fastlio2",
+        namespace="fastlio2",
+        executable="lio_node",
+        name="lio_node",
+        output="screen",
+        parameters=[{"config_path": fastlio2_config_path.perform(launch.LaunchContext()),
+                     'use_sim_time': use_sim_arg}],
+        condition=launch.conditions.IfCondition(use_fast_lio_arg)
+    )
+
+    # =========================================================
+
     pointcloud_to_laserscan_node = launch_ros.actions.Node(
         package='pointcloud_to_laserscan',
         executable='pointcloud_to_laserscan_node',
         name='pointcloud_to_laserscan',
         output='screen',
         parameters=[{
-            'target_frame': 'mid360',      
+            'target_frame': 'base_link',      
             'transform_tolerance': 0.5,            
-            'min_height': 0.0,
-            'max_height': 2.0,
+            # base_link uses the ground as z=0.  Keep a 10 cm margin so floor
+            # noise and small LIO roll/pitch errors do not become obstacles.
+            'min_height': 0.10,
+            'max_height': 0.5,
             'angle_min': -3.14159,
             'angle_max': 3.14159,
             'angle_increment': 0.0087,
             'scan_time': 0.1,
-            'range_min': 0.1,
-            'range_max': 50.0,
+            'range_min': 0.3,
+            'range_max': 10.0,
             'use_inf': False,
             'inf_epsilon': 1.0,
             'use_sim_time': use_sim_arg,
         }],
         remappings=[
-            ('cloud_in', '/cloud_registered'),
-            ('scan', '/scan')
+
+            # 它发出的点云话题默认带前缀，所以改为接收 /fastlio2/cloud_registered
+            ('/cloud_in', '/fastlio2/body_cloud'),
+            ('/scan', '/scan')
         ],
         condition=launch.conditions.IfCondition(use_fast_lio_arg)
     )
 
     # 导航相关节点组合
     navi_group = launch.actions.GroupAction([
+        SetRemap(src='/odom', dst='/fastlio2/lio_odom'),
+
+        # 1. 导航控制模块
         launch.actions.IncludeLaunchDescription(
             PythonLaunchDescriptionSource(
-                os.path.join(bringup_path, 'launch', 'bringup_launch.py')),
+                os.path.join(bringup_path, 'launch', 'navigation_launch.py')), 
             launch_arguments={
-                'map': map_arg,
                 'use_sim_time': use_sim_arg,
-                'params_file': param_arg,
+                'params_file': nav_params_no_yaw,
                 'autostart': 'True',
-                'use_composition': 'True',
+                'use_composition': 'False',
             }.items(),
+        ),
+        
+        # 2. 2D 地图服务器 
+        launch_ros.actions.Node(
+            package='nav2_map_server',
+            executable='map_server',
+            name='map_server',
+            output='screen',
+            parameters=[{'yaml_filename': map_arg, 'use_sim_time': use_sim_arg}]
+        ),
+
+        # AMCL is the sole map -> odom authority. FAST-LIO continues to own
+        # odom -> base_link.
+        launch_ros.actions.Node(
+            package='nav2_amcl',
+            executable='amcl',
+            name='amcl',
+            output='screen',
+            parameters=[param_arg, {'use_sim_time': use_sim_arg}]
+        ),
+        
+        launch_ros.actions.Node(
+            package='nav2_lifecycle_manager',
+            executable='lifecycle_manager',
+            name='lifecycle_manager_map_server',
+            output='screen',
+            parameters=[{'use_sim_time': use_sim_arg},
+                        {'autostart': True},
+                        {'node_names': ['map_server', 'amcl']}]
         )
     ])
 
+    rviz_cfg = PathJoinSubstitution(
+        [FindPackageShare("real_bringup"), "rviz", "nav_final.rviz"]
+    )
     rviz_node = launch_ros.actions.Node(
         package='rviz2',
         executable='rviz2',
         name='rviz2',
-        arguments=['-d', rviz2_path],
+        arguments=['-d', rviz_cfg.perform(launch.LaunchContext())],
         parameters=[{'use_sim_time': use_sim_arg}],
         output='screen'
     )
-
-
     ld = launch.LaunchDescription([
         declare_map_path,
         declare_use_sim_time,
         declare_params_path,
         declare_use_fast_lio,
-        mode_arg_path
+        mode_arg_path,
     ])
 
-    # 静态 TF
+    # 机器人静态 TF；map -> odom 由 AMCL 动态发布。
     ld.add_action(robot_state_publisher_node)  
+
 
     # Fast LIO
     if fast_lio_node:
         ld.add_action(fast_lio_node)
-    
+
     # 延迟启动激光转扫描
     if pointcloud_to_laserscan_node:
         ld.add_action(launch.actions.TimerAction(
-            period=2.0,
+            period=4.0,
             actions=[pointcloud_to_laserscan_node]
         ))
 
     # 延迟启动导航和 RViz
     ld.add_action(launch.actions.TimerAction(
-        period=5.0,
+        period=6.0,
         actions=[navi_group, rviz_node]
     ))
 

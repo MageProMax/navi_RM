@@ -26,4 +26,15 @@ endif()
 install(DIRECTORY urdf meshes world scan_mode launch config
 DESTINATION share/${PROJECT_NAME})
 
+# Only complete model directories belong in Gazebo's model browser path.
+install(DIRECTORY meshes/cafe_table meshes/RMUC2024_world
+                  world/room world/room2 world/RMUL2024_world
+  DESTINATION share/${PROJECT_NAME}/models)
+install(DIRECTORY meshes/RMUL2024_world/meshes
+  DESTINATION share/${PROJECT_NAME}/models/RMUL2024_world)
+foreach(obstacle_number RANGE 1 12)
+  install(DIRECTORY meshes/obstacles/obstacle${obstacle_number}
+    DESTINATION share/${PROJECT_NAME}/models)
+endforeach()
+
 ament_package()

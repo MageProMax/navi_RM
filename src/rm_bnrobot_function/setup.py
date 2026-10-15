@@ -20,7 +20,8 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            "init_pose=autopatrol_robot.patrol_node:main",
+            "init_pose=rm_bnrobot_function.init_pose:main",
+            
             
         ],
     },

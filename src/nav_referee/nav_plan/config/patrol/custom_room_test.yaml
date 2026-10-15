@@ -1,0 +1,14 @@
+# Test-only route for room.yaml + simmap_normal.pcd.
+# Starts automatically when the NavigateToPose server is ready.
+nav_to_pose_client:
+  ros__parameters:
+    goal.frame_id: map
+    patrol:
+      loop: true
+      wait_seconds: 1.0
+      point_names: [start, east, p2]
+      points:
+        start: [2.87, -5.05, 0.0]
+        east: [-7.40, -2.53, 0.0]
+        p2: [-6.82, -4.68, 0.0]
+

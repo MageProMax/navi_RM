@@ -1,0 +1,48 @@
+imu_topic: /livox/imu
+lidar_topic: /livox/lidar
+body_frame: base_link
+body_cloud_frame: base_link
+world_frame: odom
+print_time_cost: false
+
+# IMU pose in base_link: p_base = r_bi * p_imu + t_bi.
+# Derived from the new T_base_lidar and the fixed Mid-360 T_imu_lidar below.
+r_bi: [0.707105483, 0.0, 0.707108080,
+       0.0, 1.0, 0.0,
+       -0.707108080, 0.0, 0.707105483]
+t_bi: [0.198150552, 0.02329, 0.291204317]
+
+lidar_filter_num: 2
+lidar_min_range: 0.3
+lidar_max_range: 10.0
+scan_resolution: 0.05
+map_resolution: 0.1
+
+cube_len: 100
+det_range: 20
+move_thresh: 1.5
+
+na: 0.01
+ng: 0.01
+nba: 0.0001
+nbg: 0.0001
+
+# At least five seconds of stationary data are required. imu_init_num is only
+# a minimum-sample sanity check; duration and motion checks decide readiness.
+imu_init_num: 200
+imu_init_duration: 5.0
+imu_init_max_gyro: 0.05
+imu_init_max_gyro_std: 0.02
+# Dimensionless standard deviation divided by the measured gravity magnitude.
+# This keeps the stationary test identical for Livox (g) and Gazebo (m/s^2).
+imu_init_max_acc_std: 0.05
+near_search_num: 5
+ieskf_max_iter: 4
+
+gravity_align: true
+esti_il: false
+
+r_il: [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]
+t_il: [-0.011, -0.02329, 0.04412]
+
+lidar_cov_inv: 1000.0

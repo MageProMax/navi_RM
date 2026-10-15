@@ -11,12 +11,18 @@
   <xacro:property name="base_mass" value="5.0" />      <!-- 质量(kg) -->
   <xacro:property name="base_center_z" value="${base_height/2}" />  <!-- 底座中心z坐标（自动计算，避免硬编码） -->
   
-  <!-- 雷达安装参数 -->
-  <xacro:property name="lidar_install_z" value="${base_height}" />  <!-- 雷达安装在底座上表面（z=底座总高度） -->
-  <xacro:property name="lidar_topic" value="mid360" />  <!-- 雷达发布话题（与之前配置一致） -->
-
-  <!-- 2. 地面参考帧（不变） -->
-  <link name="base_footprint" />
+  <!--
+    实机雷达安装参数。base_link 位于地面零点，并遵循 ROS 的 x 向前、
+    y 向左、z 向上。SolidWorks 导出的 -Z 前向、+Y 向上已转换到 ROS：
+    雷达 FOV 原点向前 221.57 mm、离地 330.18 mm，并向前下方俯 45 度。
+  -->
+  <xacro:property name="lidar_install_x" value="0.22157" />
+  <xacro:property name="lidar_install_y" value="0.0" />
+  <xacro:property name="lidar_install_z" value="0.33018" />
+  <xacro:property name="lidar_install_roll" value="0.0" />
+  <xacro:property name="lidar_install_pitch" value="0.7854" />
+  <xacro:property name="lidar_install_yaw" value="0.0" />
+  <xacro:property name="lidar_topic" value="/livox/lidar" />  <!-- 雷达发布话题（与之前配置一致） -->
   
   <!-- 3. 核心底座（使用参数化配置） -->
   <link name="base_link">
@@ -47,20 +53,35 @@
     </inertial>
   </link>
   
-  <!-- 4. base_footprint到base_link的固定关节（参数化z轴高度） -->
-  <joint name="base_joint" type="fixed">
-    <parent link="base_footprint" />
-    <child link="base_link" />
-    <origin xyz="0.0 0.0 ${base_center_z}" rpy="0 0 0" />  <!-- z=底座中心高度（下表面贴地） -->
-  </joint>
-
-  <!-- 5. 集成Livox Mid360激光雷达（保持原有宏调用，参数化配置） -->
+  <!-- 4. 集成 Livox Mid-360；实机 TF 根节点直接使用 base_link。 -->
   <!-- 包含Mid360的xacro文件（确保ros2_livox_simulation功能包已编译安装） -->
   <xacro:include filename="$(find ros2_livox_simulation)/urdf/mid360.xacro" />
   
   <!-- 调用Mid360宏：使用参数化安装位置和话题 -->
   <xacro:mid360 name="mid360" parent="base_link" topic="${lidar_topic}" >
-    <origin xyz="0 0 ${lidar_install_z}" rpy="0 0 0"/>
+    <origin xyz="${lidar_install_x} ${lidar_install_y} ${lidar_install_z}"
+            rpy="${lidar_install_roll} ${lidar_install_pitch} ${lidar_install_yaw}"/>
   </xacro:mid360>
+
+  <!-- livox_ros_driver2 的原始点云和 IMU 消息使用该兼容 frame id。 -->
+  <link name="livox_frame" />
+  <joint name="mid360_to_livox_frame" type="fixed">
+    <parent link="mid360" />
+    <child link="livox_frame" />
+    <origin xyz="0 0 0" rpy="0 0 0" />
+  </joint>
+
+  <!--
+    Mid-360 内置 IMU 原点。这里由 T_base_lidar 和 FAST-LIO 官方
+    T_imu_lidar (R=I, t=[-0.011,-0.02329,0.04412]) 组合得到。
+    p_base = R_base_imu * p_imu + t_base_imu。
+  -->
+  <link name="livox_imu" />
+  <joint name="base_to_livox_imu" type="fixed">
+    <parent link="base_link" />
+    <child link="livox_imu" />
+    <origin xyz="0.198150552 0.02329 0.291204317"
+            rpy="${lidar_install_roll} ${lidar_install_pitch} ${lidar_install_yaw}" />
+  </joint>
 
 </robot>

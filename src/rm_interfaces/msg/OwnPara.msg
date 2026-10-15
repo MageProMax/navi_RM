@@ -1,0 +1,8 @@
+int16 current_hp
+uint16 maximum_hp
+uint8 hp_deduction_reason
+uint8 recovery_rfid
+uint8 mid_rfid
+uint8 power_management_shooter_output
+uint8 recovery_buff
+uint8 shooter_remain

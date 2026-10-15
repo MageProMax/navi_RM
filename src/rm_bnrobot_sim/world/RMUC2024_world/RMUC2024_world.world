@@ -59,7 +59,7 @@
         <collision name='collision'>
           <geometry>
             <mesh>
-              <uri>package://rm_bnrobot_sim/meshes/RMUC2024_world/meshes/RMUC_2024.stl</uri>
+              <uri>model://RMUC2024_world/meshes/RMUC_2024.stl</uri>
 
               <scale>1 1 1</scale>
             </mesh>
@@ -84,7 +84,7 @@
         <visual name='visual'>
           <geometry>
             <mesh>
-              <uri>package://rm_bnrobot_sim/meshes/RMUC2024_world/meshes/RMUC_2024.stl</uri>
+              <uri>model://RMUC2024_world/meshes/RMUC_2024.stl</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>

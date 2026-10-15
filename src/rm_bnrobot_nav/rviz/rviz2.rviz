@@ -82,8 +82,6 @@ Visualization Manager:
       Frame Timeout: 15
       Frames:
         All Enabled: true
-        base_footprint:
-          Value: true
         base_link:
           Value: true
         front_left_wheel_link:
@@ -110,19 +108,18 @@ Visualization Manager:
       Tree:
         map:
           odom:
-            base_footprint:
-              base_link:
-                front_left_wheel_link:
+            base_link:
+              front_left_wheel_link:
+                {}
+              front_right_wheel_link:
+                {}
+              laser_cylinder_link:
+                laser_link:
                   {}
-                front_right_wheel_link:
-                  {}
-                laser_cylinder_link:
-                  laser_link:
-                    {}
-                rear_left_wheel_link:
-                  {}
-                rear_right_wheel_link:
-                  {}
+              rear_left_wheel_link:
+                {}
+              rear_right_wheel_link:
+                {}
       Update Interval: 0
       Value: true
     - Alpha: 0.699999988079071
@@ -185,10 +182,6 @@ Visualization Manager:
         Expand Link Details: false
         Expand Tree: false
         Link Tree Style: Links in Alphabetic Order
-        base_footprint:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
         base_link:
           Alpha: 1
           Show Axes: false

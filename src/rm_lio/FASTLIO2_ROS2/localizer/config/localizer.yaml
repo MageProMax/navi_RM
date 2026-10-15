@@ -1,0 +1,26 @@
+cloud_topic: /fastlio2/body_cloud
+odom_topic: /fastlio2/lio_odom
+map_frame: map
+local_frame: odom
+update_hz: 5.0
+registration_method: gicp
+covariance_neighbors: 20
+rough_correspondence_distance: 1.0
+refine_correspondence_distance: 0.5
+min_inlier_ratio: 0.5
+accumulation_seconds: 0.5
+accumulation_max_frames: 10
+accumulation_voxel: 0.08
+accumulation_max_points_per_frame: 30000
+sync_tolerance: 0.02
+max_scan_age: 0.5
+
+rough_scan_resolution: 0.1
+rough_map_resolution: 0.15
+rough_max_iteration: 5
+rough_score_thresh: 0.3
+
+refine_scan_resolution: 0.05
+refine_map_resolution: 0.1
+refine_max_iteration: 6
+refine_score_thresh: 0.11

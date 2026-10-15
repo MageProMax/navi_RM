@@ -10,8 +10,12 @@
   <!-- ROS2功能包依赖 -->
   <depend>rclcpp</depend>
   <depend>geometry_msgs</depend>
+  <depend>rm_interfaces</depend>
+
 
   <export>
     <build_type>ament_cmake</build_type>
   </export>
+  <depend>usb_can_transport</depend>
+  <depend>std_msgs</depend>
 </package>
