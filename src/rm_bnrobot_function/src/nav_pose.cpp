@@ -38,6 +38,19 @@ public:
           mapping_ready_=msg->data;
         });
     }
+    recovery_sub_ = create_subscription<std_msgs::msg::Bool>("/navigation/recovery_active",
+      rclcpp::QoS(1).reliable().transient_local(), [this](std_msgs::msg::Bool::ConstSharedPtr msg) {
+        if(msg->data==recovering_)return;
+        recovering_=msg->data;
+        if(recovering_) {
+          cancelCurrent();pending_=have_goal_;
+          if(!paused_ && !emergency_)state_="recovering";
+        } else if(!paused_ && !emergency_) {
+          pending_=have_goal_;next_goal_time_=0;state_="waiting";
+          dispatch();
+        }
+        publishStatus();
+      });
     require_motion_ready_ = declare_parameter<bool>("require_motion_ready", false);
     if (require_motion_ready_) {
       motion_sub_ = create_subscription<std_msgs::msg::UInt8MultiArray>(
@@ -138,6 +151,7 @@ public:
 
 private:
   void dispatch() {
+    if(recovering_)return;
     if (paused_ || emergency_) return;
     if (require_mapping_ready_ && (!mapping_ready_ || now().seconds()-mapping_ready_since_<1.0)) {state_="waiting_mapping";return;}
     if (now().nanoseconds() < next_goal_time_) return;
@@ -261,6 +275,7 @@ private:
     if(state_=="waiting_mapping") return "等待回环地图重建及代价地图更新；旧路径已取消";
     if(state_=="waiting_localization") return "等待有效的 map 到 nav_base_link 定位 TF；目标尚未发送";
     if(state_=="sending") return "正在发送目标，等待 Nav2 接受";
+    if(state_=="recovering") return "正在自动脱困，完成后重新规划原目标";
     if(state_=="executing") return "Nav2 已接受目标，正在执行导航任务";
     if(state_=="waiting" && !have_goal_ && mode_=="explore_goal") return "目的地探索已启用，等待可达前沿逐段接近目标";
     if(state_=="waiting" && !have_goal_) return mode_=="explore" ?
@@ -291,6 +306,8 @@ private:
     else if(point_index_<point_names_.size()) status.point_name=point_names_[point_index_];
     status.distance_remaining=distance_remaining_;status_pub_->publish(status);
   }
+  bool recovering_=false;
+  rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr recovery_sub_;
   std::string state_{"waiting"};
   bool paused_{false}, emergency_{false};
   bool require_mapping_ready_{false}, mapping_ready_{false};

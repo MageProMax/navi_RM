@@ -14,13 +14,14 @@
   <!--
     实机雷达安装参数。base_link 位于地面零点，并遵循 ROS 的 x 向前、
     y 向左、z 向上。SolidWorks 导出的 -Z 前向、+Y 向上已转换到 ROS：
-    雷达 FOV 原点向前 221.57 mm、离地 330.18 mm，并向前下方俯 45 度。
+    雷达 FOV 原点位于车体左侧 221.57 mm，无前向偏移，离地 330.18 mm，
+    雷达 x 轴向前，z 轴向左上方（沿用约 45 度倾角，roll=-0.7854）。
   -->
-  <xacro:property name="lidar_install_x" value="0.22157" />
-  <xacro:property name="lidar_install_y" value="0.0" />
+  <xacro:property name="lidar_install_x" value="0.0" />
+  <xacro:property name="lidar_install_y" value="0.22157" />
   <xacro:property name="lidar_install_z" value="0.33018" />
-  <xacro:property name="lidar_install_roll" value="0.0" />
-  <xacro:property name="lidar_install_pitch" value="0.7854" />
+  <xacro:property name="lidar_install_roll" value="-0.7854" />
+  <xacro:property name="lidar_install_pitch" value="0.0" />
   <xacro:property name="lidar_install_yaw" value="0.0" />
   <xacro:property name="lidar_topic" value="/livox/lidar" />  <!-- 雷达发布话题（与之前配置一致） -->
   
@@ -80,7 +81,7 @@
   <joint name="base_to_livox_imu" type="fixed">
     <parent link="base_link" />
     <child link="livox_imu" />
-    <origin xyz="0.198150552 0.02329 0.291204317"
+    <origin xyz="0.011000000 0.206840878 0.282513959"
             rpy="${lidar_install_roll} ${lidar_install_pitch} ${lidar_install_yaw}" />
   </joint>
 

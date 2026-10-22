@@ -22,3 +22,15 @@ online_pgo:
     min_ground_height: -0.15
     min_obstacle_height: 0.10
     max_obstacle_height: 1.50
+    # Static-map cleaning only; raw /fastlio2/body_cloud and /scan stay untouched.
+    static_filter:
+      enabled: true
+      voxel_size: 0.10
+      endpoint_margin: 0.20
+      min_observation_interval: 0.5
+      stationary_observation_interval: 1.0
+      min_free_observations: 3
+      free_to_hit_ratio: 3.0
+      max_range: 10.0
+      maximum_voxels: 2000000
+      maximum_ray_steps: 60000000

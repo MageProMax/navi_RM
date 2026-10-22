@@ -13,6 +13,7 @@
 
 struct HBAConfig
 {
+    bool planar = false;
     int window_size = 20;
     int stride = 10;
     double voxel_size = 1.0;

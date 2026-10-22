@@ -6,6 +6,9 @@
 #include <filesystem>
 #include <pcl/io/pcd_io.h>
 #include <chrono>
+#include <iomanip>
+#include <sstream>
+#include <stdexcept>
 #include <sensor_msgs/msg/point_cloud2.hpp>
 #include <pcl_conversions/pcl_conversions.h>
 
@@ -15,17 +18,13 @@
 using namespace std::chrono_literals;
 void fromStr(const std::string &str, std::string &file_name, Pose &pose)
 {
-    std::stringstream ss(str);
-    std::vector<std::string> tokens;
-    std::string token;
-    while (std::getline(ss, token, ' '))
-    {
-        tokens.push_back(token);
-    }
-    assert(tokens.size() == 8);
-    file_name = tokens[0];
-    pose.t = V3D(std::stod(tokens[1]), std::stod(tokens[2]), std::stod(tokens[3]));
-    pose.r = Eigen::Quaterniond(std::stod(tokens[4]), std::stod(tokens[5]), std::stod(tokens[6]), std::stod(tokens[7])).normalized().toRotationMatrix();
+    std::istringstream ss(str);double qw,qx,qy,qz;std::string extra;
+    if(!(ss>>file_name>>pose.t.x()>>pose.t.y()>>pose.t.z()>>qw>>qx>>qy>>qz) || (ss>>extra))
+        throw std::invalid_argument("Expected filename tx ty tz qw qx qy qz");
+    Eigen::Quaterniond q(qw,qx,qy,qz);
+    if(!pose.t.allFinite() || !q.coeffs().allFinite() || q.norm()<1e-8)
+        throw std::invalid_argument("Invalid pose or quaternion");
+    pose.r=q.normalized().toRotationMatrix();
 }
 
 struct NodeConfig
@@ -67,6 +66,7 @@ public:
 
         m_node_config.scan_resolution = config["scan_resolution"].as<double>();
         m_hba_config.window_size = config["window_size"].as<int>();
+        m_hba_config.planar = config["planar"].as<bool>(false);
         m_hba_config.stride = config["stride"].as<int>();
         m_hba_config.voxel_size = config["voxel_size"].as<double>();
         m_hba_config.min_point_num = config["min_point_num"].as<int>();
@@ -75,6 +75,9 @@ public:
         m_hba_config.ba_max_iter = config["ba_max_iter"].as<size_t>();
         m_hba_config.hba_iter = config["hba_iter"].as<size_t>();
         m_hba_config.down_sample = config["down_sample"].as<double>();
+        if(m_hba_config.window_size<2 || m_hba_config.stride<2 || m_hba_config.stride>=m_hba_config.window_size ||
+           m_hba_config.hba_iter<1 || m_hba_config.ba_max_iter<1 || m_node_config.scan_resolution<=0.)
+            throw std::invalid_argument("Invalid HBA configuration");
     }
 
     void refineMapCB(const std::shared_ptr<interface::srv::RefineMap::Request> request, std::shared_ptr<interface::srv::RefineMap::Response> response)
@@ -105,37 +108,52 @@ public:
             return;
         }
 
+        try {
+        // Load transactionally. A malformed/missing scan must neither crash
+        // the process nor silently change the pose-to-patch correspondence.
+        auto loaded=std::make_shared<HBA>(m_hba_config);
         std::ifstream ifs(txt_file);
+        if(!ifs)throw std::runtime_error("Cannot open poses.txt");
         std::string line;
         std::string file_name;
         Pose pose;
         pcl::PCDReader reader;
         while (std::getline(ifs, line))
         {
-
+            if(line.find_first_not_of(" \t\r\n")==std::string::npos)continue;
             fromStr(line, file_name, pose);
             std::filesystem::path pcd_file = p_dir / "patches" / file_name;
             if (!std::filesystem::exists(pcd_file))
             {
-                std::cerr << "pcd file not found" << std::endl;
-                continue;
+                throw std::runtime_error("Missing patch: "+pcd_file.string());
             }
             pcl::PointCloud<pcl::PointXYZI>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZI>);
-            reader.read(pcd_file, *cloud);
+            if(reader.read(pcd_file, *cloud)<0 || cloud->empty())
+                throw std::runtime_error("Empty or unreadable patch: "+pcd_file.string());
             m_voxel_grid.setInputCloud(cloud);
             m_voxel_grid.filter(*cloud);
-            m_hba->insert(cloud, pose);
+            loaded->insert(cloud, pose);
         }
+        if(loaded->poses().size()<static_cast<size_t>(m_hba_config.window_size))
+            throw std::runtime_error("Need at least window_size poses (default 20)");
+        m_hba=std::move(loaded);m_optimized=false;
         RCLCPP_INFO(this->get_logger(), "LOAD POSE %lu;", m_hba->poses().size());
         response->success = true;
         response->message = "load poses success!";
         m_do_optimize = true;
+        } catch(const std::exception &error) {
+            response->success=false;response->message=error.what();
+            RCLCPP_ERROR(get_logger(),"HBA load rejected: %s",error.what());
+        }
         return;
     }
 
     void savePosesCB(const std::shared_ptr<interface::srv::SavePoses::Request> request, std::shared_ptr<interface::srv::SavePoses::Response> response)
     {
         std::lock_guard<std::mutex> lock(m_service_mutex);
+        if(!m_optimized || m_do_optimize) {
+            response->success=false;response->message="Wait for END OPTIMIZE; no successful optimization to save";return;
+        }
         std::filesystem::path file_path(request->file_path);
         std::filesystem::path par_path = file_path.parent_path();
         if (!std::filesystem::exists(par_path))
@@ -151,12 +169,8 @@ public:
             return;
         }
 
-        if (std::filesystem::exists(file_path))
-        {
-            std::filesystem::remove(file_path);
-        }
-
-        m_hba->writePoses(file_path);
+        try {m_hba->writePoses(file_path);}
+        catch(const std::exception &error){response->success=false;response->message=error.what();return;}
         response->success = true;
         response->message = "save poses success!";
         return;
@@ -168,6 +182,8 @@ public:
             if (!m_do_optimize)
                 return;
             RCLCPP_WARN(this->get_logger(), "START OPTIMIZE");
+            const auto original=m_hba->poses();
+            try {
             publishMap();
             for (size_t i = 0; i < m_hba_config.hba_iter; i++)
             {
@@ -178,7 +194,12 @@ public:
             }
 
             m_do_optimize = false;
+            m_optimized=true;
             RCLCPP_WARN(this->get_logger(), "END OPTIMIZE");
+            } catch(const std::exception &error) {
+                m_hba->poses()=original;m_do_optimize=false;m_optimized=false;
+                RCLCPP_ERROR(get_logger(),"HBA OPTIMIZE FAILED: %s",error.what());
+            }
         }
     }
 
@@ -210,6 +231,7 @@ private:
     pcl::VoxelGrid<pcl::PointXYZI> m_voxel_grid;
     std::mutex m_service_mutex;
     bool m_do_optimize = false;
+    bool m_optimized = false;
     rclcpp::TimerBase::SharedPtr m_timer;
 };
 

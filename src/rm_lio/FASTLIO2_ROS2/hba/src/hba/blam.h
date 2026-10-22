@@ -89,6 +89,7 @@ private:
 
 struct BLAMConfig
 {
+    bool planar = false;
     double voxel_size = 1.0;
     int min_point_num = 10;
     int max_layer = 4;

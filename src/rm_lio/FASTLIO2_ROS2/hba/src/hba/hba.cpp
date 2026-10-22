@@ -1,4 +1,8 @@
 #include "hba.h"
+#include "graph_information.h"
+#include <gtsam/slam/PriorFactor.h>
+#include <iomanip>
+#include <filesystem>
 HBA::HBA(const HBAConfig config) : m_config(config)
 {
     m_poses.clear();
@@ -31,7 +35,16 @@ void HBA::optimize()
     for (size_t j = 0; j < m_poses.size(); j++)
     {
         initial_estimates.insert(j, gtsam::Pose3(gtsam::Rot3(poses[j].r), gtsam::Point3(poses[j].t)));
+        if(m_config.planar && j>0) {
+            const auto noise=gtsam::noiseModel::Diagonal::Variances(
+                (gtsam::Vector6()<<1e-8,1e-8,1e12,1e12,1e12,1e-8).finished());
+            graph.add(gtsam::PriorFactor<gtsam::Pose3>(j,initial_estimates.at<gtsam::Pose3>(j),noise));
+        }
     }
+    // BA has a six-dimensional gauge freedom. Keep the original map frame
+    // instead of allowing every offline run to tilt/translate the whole map.
+    graph.add(gtsam::PriorFactor<gtsam::Pose3>(0,initial_estimates.at<gtsam::Pose3>(0),
+        gtsam::noiseModel::Diagonal::Variances(gtsam::Vector6::Ones()*1e-8)));
 
     for (int level = 0; level < m_levels; level++)
     {
@@ -52,19 +65,27 @@ void HBA::optimize()
         gtsam::BetweenFactor<gtsam::Pose3> between_factor(between_factors_id[j].first,
                                                           between_factors_id[j].second,
                                                           gtsam::Pose3(gtsam::Rot3(between_factors_pose[j].r), gtsam::Point3(between_factors_pose[j].t)),
-                                                          gtsam::noiseModel::Gaussian::Information(between_factors_info[j]));
+                                                          gtsam::noiseModel::Gaussian::Information(relativeInformation(between_factors_info[j])));
         graph.add(between_factor);
     }
     // 优化
+    if(between_factors_id.empty())throw std::runtime_error("No HBA relative constraints");
+    const double before_error=graph.error(initial_estimates);
+    if(!std::isfinite(before_error))throw std::runtime_error("Invalid HBA graph objective");
     gtsam::LevenbergMarquardtOptimizer optimizer(graph, initial_estimates, lm_params);
 
     std::cout << "LM OPTIMIZE " << std::endl;
     gtsam::Values result = optimizer.optimize();
+    const double after_error=graph.error(result);
+    if(!std::isfinite(after_error) || after_error>before_error+1e-6*std::max(1.,before_error))
+        throw std::runtime_error("HBA graph optimization did not produce a finite improving result");
+    std::cout<<"HBA GRAPH ERROR "<<before_error<<" -> "<<after_error<<std::endl;
     // 更新位姿
     std::cout << "UPDATE POSE ESTIMATE" << std::endl;
     for (size_t j = 0; j < m_poses.size(); j++)
     {
         gtsam::Pose3 pose = result.at<gtsam::Pose3>(j);
+        if(!pose.matrix().allFinite())throw std::runtime_error("Non-finite optimized HBA pose");
         m_poses[j].t = pose.translation().matrix().cast<double>();
         m_poses[j].r = pose.rotation().matrix().cast<double>();
     }
@@ -95,6 +116,8 @@ void HBA::constructHierarchy(Vec<pcl::PointCloud<pcl::PointXYZI>::Ptr> &clouds, 
     config.max_iter = m_config.ba_max_iter;
     config.max_layer = m_config.max_layer;
     config.min_point_num = m_config.min_point_num;
+    config.plane_thresh = m_config.plane_thresh;
+    config.planar = m_config.planar;
     for (size_t i = 0; i < clouds.size(); i += m_config.stride)
     {
         m_lbas[level].emplace_back(config);
@@ -162,13 +185,18 @@ pcl::PointCloud<pcl::PointXYZI>::Ptr HBA::getMapPoints()
 }
 void HBA::writePoses(const std::string &path)
 {
-    std::ofstream txt_file(path);
+    const auto temporary=path+".tmp";
+    std::ofstream txt_file;txt_file.exceptions(std::ios::failbit|std::ios::badbit);
+    txt_file.open(temporary);txt_file<<std::setprecision(17);
     for (size_t i = 0; i < m_poses.size(); i++)
     {
         Pose &pose = m_poses[i];
         V3D t = pose.t;
         Eigen::Quaterniond q(pose.r);
+        if(!t.allFinite()||!q.coeffs().allFinite()||q.norm()<1e-8)throw std::runtime_error("Invalid optimized pose");
+        q.normalize();
         txt_file << t.x() << " " << t.y() << " " << t.z() << " " << q.w() << " " << q.x() << " " << q.y() << " " << q.z() << std::endl;
     }
     txt_file.close();
+    std::filesystem::rename(temporary,path);
 }

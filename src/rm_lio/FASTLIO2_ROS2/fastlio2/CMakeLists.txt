@@ -66,6 +66,11 @@ install(DIRECTORY config DESTINATION share/${PROJECT_NAME})
 
 
 if(BUILD_TESTING)
+  enable_testing()
+  add_executable(lio_regression_test test/lio_regression_test.cpp src/map_builder/ieskf.cpp)
+  target_include_directories(lio_regression_test PRIVATE src ${PCL_INCLUDE_DIRS})
+  target_link_libraries(lio_regression_test ${PCL_LIBRARIES})
+  add_test(NAME lio_regression_test COMMAND lio_regression_test)
   find_package(ament_lint_auto REQUIRED)
   # the following line skips the linter which checks for copyrights
   # comment the line when a copyright and license is added to all source files

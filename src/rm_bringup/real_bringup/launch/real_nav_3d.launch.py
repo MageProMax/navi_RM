@@ -18,6 +18,7 @@ def generate_launch_description():
         'slam_params_file': os.path.join(bringup, 'config', 'exploration_slam.yaml'),
         'exploration_params_file': os.path.join(bringup, 'config', 'exploration.yaml'),
         'use_ui': 'false',
+        'ui_start_empty': 'false',
         'patrol_mode': 'formal',
         'patrol_file': PathJoinSubstitution([get_package_share_directory('nav_plan'), 'config', 'patrol', PythonExpression(["'custom_room_test.yaml' if '", LaunchConfiguration('patrol_mode'), "' == 'test' else 'custom_room.yaml'"])]),
         'use_nav_plan': 'false', 'use_sim_time': 'false', 'use_fast_lio': 'true', 'use_rviz': 'true',
@@ -26,6 +27,7 @@ def generate_launch_description():
         'param_file': os.path.join(bringup, 'config', 'real_nav2_params_3d.yaml'),
         'lio_config': os.path.join(get_package_share_directory('fastlio2'), 'config', 'lio.yaml'),
         'model': os.path.join(sim, 'urdf', 'bngu_sentinel', 'bnbot_real.xacro'),
+        'rviz_config_file': os.path.join(bringup, 'rviz', 'nav_final.rviz'),
         'initial_pose_x': '-1.96', 'initial_pose_y': '-1.85', 'initial_pose_yaw': '0.0',
     }
     declared = [launch.actions.DeclareLaunchArgument(k, default_value=v) for k,v in defaults.items()]

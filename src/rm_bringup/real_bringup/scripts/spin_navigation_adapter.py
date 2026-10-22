@@ -3,16 +3,22 @@
 import copy
 import math
 import time
+import json
+import numpy as np
 
 import rclpy
 from rclpy.node import Node
 from rclpy.executors import ExternalShutdownException
 from rclpy.qos import qos_profile_sensor_data, QoSProfile, DurabilityPolicy, ReliabilityPolicy
 from geometry_msgs.msg import Twist, TransformStamped
-from nav_msgs.msg import Odometry
-from std_msgs.msg import Bool, Float64
+from nav_msgs.msg import Odometry, Path
+from nav2_msgs.msg import Costmap
+from rm_interfaces.msg import NavigationStatus
+from navigation_recovery import Recovery, RecoveryConfig, Grid, Decision
+from std_msgs.msg import Bool, Float64, String
 from sensor_msgs.msg import LaserScan
-from tf2_ros import TransformBroadcaster
+from tf2_ros import TransformBroadcaster, Buffer, TransformListener
+from rclpy.time import Time
 
 
 class SpinNavigationAdapter(Node):
@@ -24,10 +30,27 @@ class SpinNavigationAdapter(Node):
         if self.require_mapping_ready:
             self.create_subscription(Bool,'/pgo/map_ready',self.mapping_cb,QoSProfile(depth=10,durability=DurabilityPolicy.TRANSIENT_LOCAL,reliability=ReliabilityPolicy.RELIABLE))
         self.scan_guard = bool(self.declare_parameter('scan_guard', False).value)
+        self.recovery_enabled=bool(self.declare_parameter('recovery.enabled',False).value)
+        self.recovery_decision=Decision();self.recovery_announced=False;self.recovery_tick_time=-math.inf
+        if self.recovery_enabled:
+            defaults=RecoveryConfig();values={}
+            for key,value in defaults.__dict__.items():values[key]=self.declare_parameter('recovery.'+key,value).value
+            self.recovery=Recovery(RecoveryConfig(**values))
+            self.recovery_grid=None;self.grid_receipt=-math.inf;self.grid_stamp=-math.inf
+            self.client_status=None;self.client_receipt=-math.inf;self.explorer_state='';self.explorer_receipt=-math.inf
+            self.path=[];self.path_receipt=-math.inf;self.path_stamp=-math.inf;self.task_key=None
+            self.recovery_buffer=Buffer();self.recovery_listener=TransformListener(self.recovery_buffer,self)
+            self.recovery_active_pub=self.create_publisher(Bool,'/navigation/recovery_active',QoSProfile(depth=1,durability=DurabilityPolicy.TRANSIENT_LOCAL,reliability=ReliabilityPolicy.RELIABLE))
+            self.recovery_status_pub=self.create_publisher(String,'/navigation/recovery_status',10)
+            self.recovery_active_pub.publish(Bool(data=False));self.last_recovery_state=''
+            self.create_subscription(Costmap,'/local_costmap/costmap_raw',self.costmap_cb,1)
+            self.create_subscription(NavigationStatus,'/navigation/client/status',self.client_cb,10)
+            self.create_subscription(String,'/exploration/status',self.explorer_cb,10)
+            self.create_subscription(Path,'/plan',self.path_cb,1)
         self.scan_points = []
         self.exploration_yaw=0.;self.exploration_yaw_receipt=-math.inf;self.hit_spinning=False
         self.scan_stamp = -math.inf
-        if self.scan_guard:
+        if self.scan_guard or self.recovery_enabled:
             self.create_subscription(LaserScan, '/scan', self.scan_cb, qos_profile_sensor_data)
             self.create_subscription(Float64,'/navigation/exploration_yaw_rate',self.exploration_yaw_cb,1)
             self.create_subscription(Bool,'/spin_active',lambda m:setattr(self,'hit_spinning',m.data),1)
@@ -54,6 +77,81 @@ class SpinNavigationAdapter(Node):
         self.yaw = self.yaw_rate = 0.0
         self.stamp_seconds = 0.0
         self.create_timer(0.01, self.tick)
+
+    def client_cb(self,msg):
+        if msg.paused or msg.emergency_stop or msg.state in ('stopped','complete'):
+            self.recovery.cancel();self.recovery.goal=None;self.recovery.attempts=0
+        self.recovery_tick_time=-math.inf
+        key=(msg.mode,msg.point_index,msg.target.goal_frame_id,round(msg.target.goal_x,4),round(msg.target.goal_y,4))
+        if key!=self.task_key:self.path_receipt=-math.inf;self.task_key=key
+        self.client_status=msg;self.client_receipt=self.elapsed_clock()
+
+    def explorer_cb(self,msg):
+        try:self.explorer_state=json.loads(msg.data).get('state','');self.explorer_receipt=self.elapsed_clock()
+        except (ValueError,TypeError):self.explorer_receipt=-math.inf
+
+    def costmap_cb(self,msg):
+        self.grid_receipt=-math.inf
+        if msg.header.frame_id!='odom':return
+        meta=msg.metadata;q=meta.origin.orientation
+        yaw=math.atan2(2*(q.w*q.z+q.x*q.y),1-2*(q.y*q.y+q.z*q.z))
+        try:self.recovery_grid=Grid(np.asarray(msg.data,dtype=np.uint8).reshape(meta.size_y,meta.size_x),meta.resolution,(meta.origin.position.x,meta.origin.position.y,yaw))
+        except (ValueError,OverflowError):return
+        self.grid_receipt=self.elapsed_clock();self.grid_stamp=msg.header.stamp.sec+msg.header.stamp.nanosec*1e-9
+
+    def path_cb(self,msg):
+        self.path=[];self.path_receipt=-math.inf
+        if not msg.poses:return
+        try:
+            if msg.header.frame_id=='odom':c,s,x,y=1.,0.,0.,0.
+            else:
+                transform=self.recovery_buffer.lookup_transform('odom',msg.header.frame_id,Time())
+                q=transform.transform.rotation;t=transform.transform.translation
+                yaw=math.atan2(2*(q.w*q.z+q.x*q.y),1-2*(q.y*q.y+q.z*q.z));c,s,x,y=math.cos(yaw),math.sin(yaw),t.x,t.y
+            self.path=[(x+c*p.pose.position.x-s*p.pose.position.y,y+s*p.pose.position.x+c*p.pose.position.y) for p in msg.poses]
+            if not all(math.isfinite(v) for p in self.path for v in p):self.path=[];return
+            self.path_receipt=self.elapsed_clock();self.path_stamp=msg.header.stamp.sec+msg.header.stamp.nanosec*1e-9
+        except Exception:return
+
+    def recovery_update(self,now,odom_valid):
+        if not self.recovery_enabled:return Decision()
+        if 0<=now-self.recovery_tick_time<.1:return self.recovery_decision
+        self.recovery_tick_time=now;client=self.client_status
+        pose=(self.last_odom[0].pose.pose.position.x,self.last_odom[0].pose.pose.position.y,self.yaw) if self.last_odom else (0.,0.,0.)
+        task=client is not None and 0<=now-self.client_receipt<2. and not client.paused and not client.emergency_stop
+        if task:
+            exploration=client.mode in ('explore','explore_goal') and 0<=now-self.explorer_receipt<2. and self.explorer_state=='no_reachable_frontiers'
+            task=(client.state in ('sending','executing','failed','rejected','recovering') or
+                  (client.state=='waiting' and client.point_count>0) or exploration)
+            # Nav2 can report zero distance when planning has produced no path.
+            # Only a geometrically nearby goal suppresses stalled-goal spin;
+            # a costmap overlap still needs recovery even beside the goal.
+            if client.state=='executing' and self.recovery_grid is not None and self.recovery_grid.sample(pose[0],pose[1])[0]<253:
+                try:
+                    gx,gy=client.target.goal_x,client.target.goal_y
+                    if client.target.goal_frame_id!='odom':
+                        tf=self.recovery_buffer.lookup_transform('odom',client.target.goal_frame_id,Time())
+                        q=tf.transform.rotation;t=tf.transform.translation
+                        angle=math.atan2(2*(q.w*q.z+q.x*q.y),1-2*(q.y*q.y+q.z*q.z))
+                        gx,gy=t.x+math.cos(angle)*gx-math.sin(angle)*gy,t.y+math.sin(angle)*gx+math.cos(angle)*gy
+                    if math.hypot(gx-pose[0],gy-pose[1])<.25:task=False
+                except Exception:pass
+        ready=not self.stopped and odom_valid and (not self.require_mapping_ready or (self.mapping_ready and now-self.mapping_ready_since>=1.))
+        ros_now=self.get_clock().now().nanoseconds*1e-9
+        fresh=(0<=now-self.grid_receipt<2. and -.05<=ros_now-self.grid_stamp<2. and -.05<=ros_now-self.scan_stamp<.5)
+        valid_path=0<=now-self.path_receipt<2.5 and -.05<=ros_now-self.path_stamp<2.5 and bool(self.path)
+        if valid_path:
+            valid_path=all(self.recovery_grid.sample(x,y)[0]<253 for x,y in self.path if math.hypot(x-pose[0],y-pose[1])<1.2) if self.recovery_grid else False
+        decision=self.recovery.tick(now,bool(task and ready),self.task_key,pose,self.recovery_grid if fresh else None,self.scan_points if fresh else [],valid_path)
+        if task and ready and not fresh:decision=Decision('waiting_sensors',override=True,reason='Recovery requires fresh costmap and laser scan')
+        if decision.active!=self.recovery_announced:
+            self.recovery_active_pub.publish(Bool(data=decision.active));self.recovery_announced=decision.active
+            # Neither start nor end of recovery may replay the old Nav2 velocity.
+            self.command=Twist();self.have_command=False;self.initial_idle=True
+        if decision.state!=self.last_recovery_state:
+            self.get_logger().info('Recovery: '+decision.state+' '+decision.reason);self.last_recovery_state=decision.state
+        self.recovery_status_pub.publish(String(data=json.dumps({'state':decision.state,'active':decision.active,'reason':decision.reason,'attempts':self.recovery.attempts})))
+        self.recovery_decision=decision;return decision
 
     def mapping_cb(self,msg):
         if msg.data and not self.mapping_ready:
@@ -128,7 +226,7 @@ class SpinNavigationAdapter(Node):
         self.exploration_yaw_receipt=self.elapsed_clock()
 
     def scan_cb(self, msg):
-        if msg.header.frame_id != 'base_link':
+        if msg.header.frame_id != 'base_link' or not all(math.isfinite(v) for v in (msg.angle_min,msg.angle_increment,msg.range_min,msg.range_max)) or msg.angle_increment<=0 or not 0<=msg.range_min<msg.range_max:
             self.scan_stamp = -math.inf
             return
         self.scan_stamp = msg.header.stamp.sec + msg.header.stamp.nanosec*1e-9
@@ -165,6 +263,7 @@ class SpinNavigationAdapter(Node):
         stamp_age = self.get_clock().now().nanoseconds*1e-9 - self.stamp_seconds
         odom_valid = (0 <= now-self.odom_receipt < self.odom_timeout and
                       -0.05 <= stamp_age < self.odom_timeout)
+        recovery=self.recovery_update(now,odom_valid)
         idle = self.have_command and abs(self.command.linear.x) < 1e-9 and abs(
             self.command.linear.y) < 1e-9 and abs(self.command.angular.z) < 1e-9
         # An explicit idle command remains idle, so a hit at a waypoint can spin.
@@ -195,6 +294,14 @@ class SpinNavigationAdapter(Node):
                     # checked translation so the robot can retreat from a wall.
                     permitted=False
                     effective.angular.z=0.
+        if recovery.override:
+            effective=Twist();permitted=False
+            if recovery.active and not self.stopped and odom_valid and (not self.require_mapping_ready or (self.mapping_ready and now-self.mapping_ready_since>=1.)):
+                scan_age=self.get_clock().now().nanoseconds*1e-9-self.scan_stamp
+                if -.05<=scan_age<.5 and self.scan_points:
+                    effective.linear.x,effective.linear.y=self.guarded_velocity(recovery.vx,recovery.vy,self.scan_points,self.recovery.config.radius)
+                    if recovery.state=='spin' and not any(math.hypot(x,y)<self.recovery.config.radius for x,y in self.scan_points):
+                        effective.angular.z=recovery.wz;permitted=True
         self.permission_pub.publish(Bool(data=permitted))
         self.cmd_pub.publish(effective)
 

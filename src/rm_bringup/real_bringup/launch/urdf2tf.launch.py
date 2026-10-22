@@ -6,7 +6,7 @@ from ament_index_python.packages import get_package_share_directory
 def generate_launch_description():
     # 获取默认路径
     urdf_path = get_package_share_directory('rm_bnrobot_sim')
-    model_path = urdf_path + '/urdf/bngu_sentinel/bnbot_real.urdf'
+    model_path = urdf_path + '/urdf/bngu_sentinel/bnbot_real.xacro'
     # 为 Launch 声明参数
     action_declare_arg_mode_path = launch.actions.DeclareLaunchArgument(
         name='model', default_value=str(model_path),

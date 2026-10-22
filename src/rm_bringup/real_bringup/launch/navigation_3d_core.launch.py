@@ -51,6 +51,7 @@ def generate_launch_description():
         launch.actions.DeclareLaunchArgument('pgo_params_file', default_value=os.path.join(bringup_path, 'config', 'exploration_pgo.yaml')),
         launch.actions.DeclareLaunchArgument('exploration_params_file', default_value=os.path.join(bringup_path, 'config', 'exploration.yaml')),
         launch.actions.DeclareLaunchArgument('use_ui', default_value='false'),
+        launch.actions.DeclareLaunchArgument('ui_start_empty', default_value='false'),
         launch.actions.DeclareLaunchArgument('patrol_mode', default_value='formal', choices=['formal', 'test']),
         launch.actions.DeclareLaunchArgument('patrol_file', default_value=PathJoinSubstitution([get_package_share_directory('nav_plan'), 'config', 'patrol', PythonExpression(["'custom_room_test.yaml' if '", LaunchConfiguration('patrol_mode'), "' == 'test' else 'custom_room.yaml'"])])),
         launch.actions.DeclareLaunchArgument('use_nav_plan', default_value='false'),
@@ -76,6 +77,7 @@ def generate_launch_description():
             description='Start FAST-LIO in this launch file'),
         launch.actions.DeclareLaunchArgument(
             'use_rviz', default_value='true'),
+        launch.actions.DeclareLaunchArgument('rviz_config_file', default_value=rviz_config),
     ]
 
     prior = launch.conditions.IfCondition(PythonExpression(["'", LaunchConfiguration('navigation_mode'), "' == 'prior'"]))
@@ -231,7 +233,7 @@ def generate_launch_description():
         executable='rviz2',
         name='rviz2',
         output='screen',
-        arguments=['-d', rviz_config],
+        arguments=['-d', LaunchConfiguration('rviz_config_file')],
         parameters=[{'use_sim_time': use_sim_time}],
         condition=launch.conditions.IfCondition(use_rviz),
     )
@@ -252,6 +254,8 @@ def generate_launch_description():
             package='rm_bnrobot_function', executable='nav_client_ui.py', name='nav_client_ui',
             output='screen', parameters=[{'use_sim_time': use_sim_time,
                 'patrol_file': LaunchConfiguration('patrol_file'),
+                'ui_start_empty': launch_ros.parameter_descriptions.ParameterValue(
+                    LaunchConfiguration('ui_start_empty'), value_type=bool),
                 'navigation_mode': LaunchConfiguration('navigation_mode')}],
             condition=launch.conditions.IfCondition(LaunchConfiguration('use_ui'))),
         launch_ros.actions.Node(
@@ -269,7 +273,7 @@ def generate_launch_description():
         launch_ros.actions.Node(
             package='real_bringup', executable='spin_navigation_adapter.py',
             name='spin_navigation_adapter', output='screen',
-            parameters=[{'use_sim_time': use_sim_time, 'require_mapping_ready': launch_ros.parameter_descriptions.ParameterValue(
+            parameters=[LaunchConfiguration('param_file'), {'use_sim_time': use_sim_time, 'require_mapping_ready': launch_ros.parameter_descriptions.ParameterValue(
                 PythonExpression(["'", LaunchConfiguration('navigation_mode'), "' == 'explore'"]), value_type=bool), 'scan_guard': launch_ros.parameter_descriptions.ParameterValue(
                 PythonExpression(["'", LaunchConfiguration('navigation_mode'), "' == 'explore'"]), value_type=bool)}]),
         launch.actions.TimerAction(period=2.0, actions=[fast_lio]),

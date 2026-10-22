@@ -360,7 +360,24 @@ void BLAM::optimize()
         }
         D = m_H.diagonal().asDiagonal();
         Eigen::MatrixXd Hess = m_H + u * D;
-        Eigen::VectorXd delta = Hess.colPivHouseholderQr().solve(-m_J);
+        Eigen::VectorXd delta;
+        if(m_config.planar) {
+            // Solve only yaw/x/y, anchoring the first window pose. Extracting
+            // the reduced system (rather than zeroing a 6-D solution later)
+            // keeps yaw/translation from compensating for forbidden tilt.
+            std::vector<int> active;
+            for(size_t pose=1;pose<m_poses.size();++pose)
+                for(int axis:{2,3,4})active.push_back(6*pose+axis);
+            Eigen::MatrixXd reduced(active.size(),active.size());Eigen::VectorXd gradient(active.size());
+            for(size_t row=0;row<active.size();++row) {
+                gradient(row)=m_J(active[row]);
+                for(size_t col=0;col<active.size();++col)reduced(row,col)=Hess(active[row],active[col]);
+            }
+            const Eigen::VectorXd step=reduced.colPivHouseholderQr().solve(-gradient);
+            delta=Eigen::VectorXd::Zero(m_J.size());
+            for(size_t row=0;row<active.size();++row)delta(active[row])=step(row);
+        } else delta = Hess.colPivHouseholderQr().solve(-m_J);
+        if(!delta.allFinite())throw std::runtime_error("Non-finite HBA local update");
         Vec<Pose> temp_pose(m_poses.begin(), m_poses.end());
         plusDelta(temp_pose, delta);
         double residual_new = evalPlanesByPoses(temp_pose);

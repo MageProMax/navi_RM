@@ -67,11 +67,13 @@ map ── localizer ──> odom ── FAST-LIO ──> base_link ── URDF 
 |---|---|
 | 雷达 FOV 原点到车体中心竖直轴的半径 | 221.57 mm |
 | 雷达 FOV 原点离地高度 | 330.18 mm |
-| FOV 原点位置 | `[0.22157, 0, 0.33018] m`，位于车体正前方 |
-| 安装倾角 | 约 45°，`pitch=0.7854 rad`，向前下方倾斜 |
+| FOV 原点位置 | `[0, 0.22157, 0.33018] m`，位于车体左侧，无前向偏移 |
+| 雷达坐标轴方向 | x 轴朝车头正前方，z 轴朝左上方，y 轴朝左下方（右手系） |
+| 安装倾角 | 沿用约 45°，`roll=-0.7854 rad, pitch=0, yaw=0` |
 
 这里的位置指 **FOV 原点**，不是 STL 模型的视觉中心，也不是雷达内部 IMU 原点。
 FAST-LIO 的车体到 IMU 外参与 IMU 到雷达外参组合后，与上述安装位置一致。
+对应 IMU 原点为 `[0.011000000, 0.206840878, 0.282513959] m`；实机／仿真模型、在线建图射线起点、动态点过滤与离线地图重建均使用同一左侧安装位置。
 软件配置已核对，实机机械尺寸以实际测量为准。
 
 ## 2. 功能包介绍
@@ -209,7 +211,7 @@ ros2 launch rm_bnrobot_function navigation_ui.launch.py use_sim_time:=false
 | 实机：仅建图，使用底盘遥控采集 | [实机仅建图](#mapping-only-real) |
 | 实机：新场地地图及巡检文件 | [7.2.8 完整启动](#real-site-full) |
 
-完整命令展开了当前 `--show-args` 列出的所有参数，包含父 launch 固定覆盖的内部项。路径使用 `$PWD/src/...`，编辑这些 YAML 后重启即可加载；修改编译源码、模型依赖或新增依赖仍需重新编译。
+完整命令列出对应模式使用的可配置参数；不适用该模式、父入口固定覆盖的内部参数和空命名空间不写入启动命令。下表保留这些参数的含义，便于查阅 `--show-args`。路径使用 `$PWD/src/...`，编辑这些 YAML 后重启即可加载；修改编译源码、模型依赖或新增依赖仍需重新编译。
 
 | 参数 | 示例／默认 | 生效范围或说明 |
 |---|---|---|
@@ -247,53 +249,36 @@ ros2 launch rm_bnrobot_function navigation_ui.launch.py use_sim_time:=false
 | `cmd_vel_topic` | `/cmd_vel_sim` | **仿真父入口固定**，Gazebo 从共享 CAN 解码桥接收速度 |
 | `autostart` | `true` | **共享核心固定**，自动激活 Nav2；不表示取消就绪检查 |
 | `use_composition` | `False` | **共享核心固定**，使用可恢复生命周期管理的独立节点 |
-| `params_file` | 内部生成的重写 YAML | **共享核心固定覆盖**，复数 `params`；命令中虽列原文件，实际传给 Nav2 的是按模式重写后的副本，调整配置用 `param_file` |
+| `params_file` | 内部生成的重写 YAML | **共享核心固定覆盖**，复数 `params`；实际传给 Nav2 的是按模式重写后的副本，无需在命令中设置；调整配置用 `param_file` |
 
-探索模式中，地图、先验定位和巡检相关参数虽为完整展示而列出，但不会加载旧地图或执行旧巡检点。当前探索由 online_pgo 独占发布 `/map` 和 `map → odom`，回环修图期间取消旧路径并暂停运动，就绪后重新规划。配置与保存指令见 [在线三维回环建图](docs/online_pgo_mapping_20261015.md)。目标探索详见 [未知目的地探索导航](docs/guided_exploration_20261015.md)。
+探索命令省略先验地图、GICP 定位和巡检参数，不会加载旧地图或执行旧巡检点。实机探索的地图坐标以本次建图初始化为参考，无需设置先验初始坐标；仿真仍通过 `initial_pose_x/y/yaw` 设置出生位姿。当前探索由 online_pgo 独占发布 `/map` 和 `map → odom`，回环修图期间取消旧路径并暂停运动，就绪后重新规划。配置与保存指令见 [在线三维回环建图](docs/online_pgo_mapping_20261015.md)。目标探索详见 [未知目的地探索导航](docs/guided_exploration_20261015.md)。
 
 ### 5.1 仿真一键启动（完整参数）
 
 <a id="sim-explore-full"></a>
 
-#### 仿真探索建图（一键全参数，推荐测试）
+#### 仿真探索建图（一键完整参数，推荐测试）
 
 ```bash
 ros2 launch sim_bringup sim_nav_3d_total.launch.py \
   navigation_mode:=explore \
-  localizer_backend:=gicp \
-  localizer_accumulation_seconds:=0.5 \
-  slam_params_file:="$PWD/src/rm_bringup/real_bringup/config/exploration_slam.yaml" \
   pgo_params_file:="$PWD/src/rm_bringup/real_bringup/config/exploration_pgo.yaml" \
   exploration_params_file:="$PWD/src/rm_bringup/real_bringup/config/exploration.yaml" \
   use_ui:=true \
-  patrol_mode:=test \
-  patrol_file:="$PWD/src/nav_referee/nav_plan/config/patrol/custom_room_test.yaml" \
   spin_speed:=1.0 \
   spin_duration:=10.0 \
   world:="$PWD/src/rm_bnrobot_sim/world/custom_room.world" \
   model:="$PWD/src/rm_bnrobot_sim/urdf/bngu_sentinel/bnbot.urdf.xacro" \
-  map:="$PWD/src/rm_bnrobot_nav/maps/room.yaml" \
-  pcd_map:="$PWD/src/rm_bnrobot_nav/maps/pcd/simmap_normal.pcd" \
   gui:=true \
   use_rviz:=true \
   initial_pose_x:=-1.96 \
   initial_pose_y:=-1.85 \
   initial_pose_yaw:=0.0 \
-  cmd_vel_topic:=/cmd_vel_sim \
   server:=true \
-  use_nav_plan:=true \
-  use_sim_time:=true \
-  use_fast_lio:=true \
   param_file:="$PWD/src/rm_bringup/real_bringup/config/real_nav2_params_3d.yaml" \
   lio_config:="$PWD/src/rm_bnrobot_nav/config/lio_sim.yaml" \
-  namespace:="" \
-  params_file:="$PWD/src/rm_bringup/real_bringup/config/real_nav2_params_3d.yaml" \
-  autostart:=true \
-  use_composition:=False \
-  container_name:=nav2_container \
   use_respawn:=False \
-  log_level:=info \
-  backend:=sim
+  log_level:=info
 ```
 
 启动 `custom_room.world`、机器人、FAST-LIO、三维 GICP 回环＋PGO、地图重建、Nav2、自动探索、客户端界面、RViz、Gazebo 和 CAN dry_run 桥。有效扫描到来后开始建图，地图与底盘就绪后自动探索；也可在界面标记未知目的地，点击开始逐段前往。
@@ -302,16 +287,13 @@ ros2 launch sim_bringup sim_nav_3d_total.launch.py \
 
 <a id="sim-prior-full"></a>
 
-#### 仿真先验巡检（一键全参数）
+#### 仿真先验巡检（一键完整参数）
 
 ```bash
 ros2 launch sim_bringup sim_nav_3d_total.launch.py \
   navigation_mode:=prior \
   localizer_backend:=gicp \
   localizer_accumulation_seconds:=0.5 \
-  slam_params_file:="$PWD/src/rm_bringup/real_bringup/config/exploration_slam.yaml" \
-  pgo_params_file:="$PWD/src/rm_bringup/real_bringup/config/exploration_pgo.yaml" \
-  exploration_params_file:="$PWD/src/rm_bringup/real_bringup/config/exploration.yaml" \
   use_ui:=true \
   patrol_mode:=test \
   patrol_file:="$PWD/src/nav_referee/nav_plan/config/patrol/custom_room_test.yaml" \
@@ -326,21 +308,11 @@ ros2 launch sim_bringup sim_nav_3d_total.launch.py \
   initial_pose_x:=-1.96 \
   initial_pose_y:=-1.85 \
   initial_pose_yaw:=0.0 \
-  cmd_vel_topic:=/cmd_vel_sim \
   server:=true \
-  use_nav_plan:=true \
-  use_sim_time:=true \
-  use_fast_lio:=true \
   param_file:="$PWD/src/rm_bringup/real_bringup/config/real_nav2_params_3d.yaml" \
   lio_config:="$PWD/src/rm_bnrobot_nav/config/lio_sim.yaml" \
-  namespace:="" \
-  params_file:="$PWD/src/rm_bringup/real_bringup/config/real_nav2_params_3d.yaml" \
-  autostart:=true \
-  use_composition:=False \
-  container_name:=nav2_container \
   use_respawn:=False \
-  log_level:=info \
-  backend:=sim
+  log_level:=info
 ```
 
 先验模式在定位及底盘就绪后按测试文件自动巡检。正式模式需同时改为 `patrol_mode:=formal` 和 `patrol_file:="$PWD/src/nav_referee/nav_plan/config/patrol/custom_room.yaml"`。
@@ -357,9 +329,13 @@ ros2 launch sim_bringup sim_nav_3d_total.launch.py \
 
 ### 5.2 实机一键启动（完整参数）
 
+命名空间保持默认空值，命令中省略 `namespace`；不要传入 `namespace:=""`，Shell 会将它变成无值的 `namespace:=`，导致 ROS 2 拒绝启动。
+
+下面两条实机导航入口都包含 Livox 雷达驱动。启动前停止单独运行的 `msg_MID360_launch.py`，避免重复启动驱动。自动探索会下发运动指令；使用遥控器手动采图时执行 [5.9 实机遥控建图](#mapping-only-real)。复制命令时，续行符 `\` 必须在行末且后面没有空格，最后一行不加续行符。
+
 <a id="real-prior-full"></a>
 
-#### 实机先验导航（一键全参数）
+#### 实机先验导航（一键完整参数）
 
 下面完整展示当前默认 `custom_room` 配对地图及正式文件。新场地需先完成 7.2 节，并使用 [7.2.8 新场地完整命令](#real-site-full)；地图、定位初值和巡检文件必须对应实际场地。
 
@@ -368,9 +344,6 @@ ros2 launch real_bringup real_nav_3d_total.launch.py \
   navigation_mode:=prior \
   localizer_backend:=gicp \
   localizer_accumulation_seconds:=0.5 \
-  slam_params_file:="$PWD/src/rm_bringup/real_bringup/config/exploration_slam.yaml" \
-  pgo_params_file:="$PWD/src/rm_bringup/real_bringup/config/exploration_pgo.yaml" \
-  exploration_params_file:="$PWD/src/rm_bringup/real_bringup/config/exploration.yaml" \
   use_ui:=true \
   patrol_mode:=formal \
   patrol_file:="$PWD/src/nav_referee/nav_plan/config/patrol/custom_room.yaml" \
@@ -382,66 +355,38 @@ ros2 launch real_bringup real_nav_3d_total.launch.py \
   initial_pose_x:=-1.96 \
   initial_pose_y:=-1.85 \
   initial_pose_yaw:=0.0 \
-  use_nav_plan:=true \
-  use_sim_time:=false \
-  use_fast_lio:=true \
   param_file:="$PWD/src/rm_bringup/real_bringup/config/real_nav2_params_3d.yaml" \
   lio_config:="$PWD/src/rm_lio/FASTLIO2_ROS2/fastlio2/config/lio.yaml" \
   model:="$PWD/src/rm_bnrobot_sim/urdf/bngu_sentinel/bnbot_real.xacro" \
-  namespace:="" \
-  params_file:="$PWD/src/rm_bringup/real_bringup/config/real_nav2_params_3d.yaml" \
-  autostart:=true \
-  use_composition:=False \
-  container_name:=nav2_container \
   use_respawn:=False \
-  log_level:=info \
-  backend:=real
+  log_level:=info
 ```
 
 正式模式按比赛状态选择目标。测试巡检需同时改为 `patrol_mode:=test` 和 `patrol_file:="$PWD/src/nav_referee/nav_plan/config/patrol/custom_room_test.yaml"`，新场地替换为本场地测试文件。
 
 <a id="real-explore-full"></a>
 
-#### 实机探索建图（一键全参数）
+#### 实机探索建图（一键完整参数）
 
 ```bash
 ros2 launch real_bringup real_nav_3d_total.launch.py \
   navigation_mode:=explore \
-  localizer_backend:=gicp \
-  localizer_accumulation_seconds:=0.5 \
-  slam_params_file:="$PWD/src/rm_bringup/real_bringup/config/exploration_slam.yaml" \
   pgo_params_file:="$PWD/src/rm_bringup/real_bringup/config/exploration_pgo.yaml" \
   exploration_params_file:="$PWD/src/rm_bringup/real_bringup/config/exploration.yaml" \
   use_ui:=true \
-  patrol_mode:=test \
-  patrol_file:="$PWD/src/nav_referee/nav_plan/config/patrol/custom_room_test.yaml" \
   spin_speed:=1.0 \
   spin_duration:=10.0 \
-  map:="$PWD/src/rm_bnrobot_nav/maps/room.yaml" \
-  pcd_map:="$PWD/src/rm_bnrobot_nav/maps/pcd/simmap_normal.pcd" \
   use_rviz:=true \
-  initial_pose_x:=-1.96 \
-  initial_pose_y:=-1.85 \
-  initial_pose_yaw:=0.0 \
-  use_nav_plan:=true \
-  use_sim_time:=false \
-  use_fast_lio:=true \
   param_file:="$PWD/src/rm_bringup/real_bringup/config/real_nav2_params_3d.yaml" \
   lio_config:="$PWD/src/rm_lio/FASTLIO2_ROS2/fastlio2/config/lio.yaml" \
   model:="$PWD/src/rm_bnrobot_sim/urdf/bngu_sentinel/bnbot_real.xacro" \
-  namespace:="" \
-  params_file:="$PWD/src/rm_bringup/real_bringup/config/real_nav2_params_3d.yaml" \
-  autostart:=true \
-  use_composition:=False \
-  container_name:=nav2_container \
   use_respawn:=False \
-  log_level:=info \
-  backend:=real
+  log_level:=info
 ```
 
 两条实机命令均包含雷达驱动、FAST-LIO、Nav2、客户端、RViz 和真实 CAN 仲裁；探索模式使用在线 PGO，不启动先验定位器和正式决策。无需额外启动 `can_twist_node` 或 `can_control`。仲裁默认在约 25 秒后启动，客户端此前等待底盘就绪。
 
-实机雷达配置位于 `src/livox_ros_driver2/config/MID360_config.json`。当前主机 IP 为 `192.168.1.5`、雷达 IP 为 `192.168.1.154`，需与现场网络匹配。驱动外参保持零值，安装变换由 URDF 与 FAST-LIO 配置处理。
+实机雷达配置位于 `src/livox_ros_driver2/config/MID360_config.json`。当前主机 IP 为 `192.168.1.5`、雷达 IP 为 `192.168.1.154`，需与现场网络匹配。驱动外参保持零值，安装变换由 URDF 与 FAST-LIO 配置处理。其中 `extrinsic_parameter.x/y/z` 必须写整数 `0`，不能写浮点数 `0.0`，否则当前驱动的 `GetInt()` 会触发断言；`roll/pitch/yaw` 可写 `0.0`。
 
 ### 5.3 实机分步启动
 
@@ -559,10 +504,10 @@ ros2 topic pub --once /goal_pose rm_interfaces/msg/Goal \
 
 本模式用于在真实场地用遥控器开车采集地图。启动 Mid-360 驱动、FAST-LIO、三维回环 PGO、机器人安装 TF 和 RViz；不启动 Gazebo、Nav2、探索器、巡检客户端或本项目的 CAN 导航下发节点。底盘沿用原有遥控控制，电脑只负责接收雷达数据和建图。
 
-先关闭旧导航／建图入口，在项目根目录按 3.2 节加载 `ros2_env` 环境。入口和 RViz 配置首次更新后执行：
+先关闭旧导航／建图入口，在项目根目录按 3.2 节加载 `ros2_env` 环境。入口、静态地图过滤和 RViz 配置首次更新后执行：
 
 ```bash
-colcon build --packages-select real_bringup
+colcon build --packages-select pgo real_bringup
 source install/setup.bash
 ```
 
@@ -589,30 +534,80 @@ ros2 launch real_bringup mapping_3d.launch.py \
 
 #### 保存二维地图、PCD 和关键帧
 
-先停车，等待 `/pgo/map_ready` 为 true。另开已加载环境的终端，目录名按场地／批次修改：
+先用遥控器停车，保持建图程序运行。人离开后继续扫描到其原位置及后方环境，等待过滤状态和 `/pgo/map_ready`，再另开已加载环境的终端保存：
 
 ```bash
-export MAPPING_DIR="$PWD/maps_output/mapping_only_20261015"
+export MAPPING_DIR="$PWD/maps_output/mapping_only_$(date +%Y%m%d_%H%M%S)"
 mkdir -p "$MAPPING_DIR/pgo"
 
-# 实机使用真实时钟
-export MAPPING_USE_SIM_TIME=false
-ros2 run nav2_map_server map_saver_cli -f "$MAPPING_DIR/map" \
-  --ros-args -p map_subscribe_transient_local:=true \
-  -p use_sim_time:="$MAPPING_USE_SIM_TIME"
-
+# 一次服务同时保存同一快照的静态 PCD 和二维地图
 ros2 service call /pgo/save_maps interface/srv/SaveMaps \
   "{file_path: '$MAPPING_DIR/pgo', save_patches: true}"
 ```
 
-输出包括 `map.yaml`／`map.pgm`、`pgo/map.pcd`、`pgo/poses.txt` 和 `pgo/patches/`。这里运行的 `map_saver_cli` 仅是保存工具，不启动导航。用于后续先验导航时，按 7.2.4 节用保存的关键帧生成最终配对地图，保证 PCD 与二维图使用同一版位姿。
+返回 `success: true` 后，`pgo/` 下包含配对的 `map.pcd`、`map.pgm`、`map.yaml` 和 `start_pose.env`；`patches/`、`poses.txt`、`frame_times.txt` 保留原始观测及优化位姿，便于重新过滤。`dynamic_filter.yaml` 保存本次过滤配置，`filter_metadata.yaml` 记录删点数量及是否触及资源上限。`map_saver_cli` 仍能单独保存当前 `/map`，部署先验导航时使用本服务一次生成的配对文件，避免两次保存跨越地图更新。
 
 ```bash
-ros2 topic echo /pgo/status
+ros2 topic echo /pgo/static_filter_status --qos-durability transient_local
 ros2 topic echo /pgo/map_ready --qos-durability transient_local
 ```
 
+三维多帧一致性过滤默认开启：体素 0.10 m，至少 3 次独立空闲观测，空闲／占用证据比至少 3:1。射线只在真实返回之前的三维空间提供证据，端点前保护 0.20 m，按实际端点的三维位置保留邻近表面；不能通过抬高扫描高度或简单删稀疏点来代替。停车时每秒保存一次辅助观测，最近观测绑定到图优化关键帧，回环后同步重算。实时 `/fastlio2/body_cloud`、避障 `/scan` 和 `/scan_mapping` 不删行人。
+
+未被重新看见、始终遮挡或一直站着不动的人仍可能留下，需要补扫；资源预算耗尽时保守保留全部点并报告 `*_budget_retained_all`，不能把此状态当作已经完成清理。详细参数与验证见 [静态地图动态点清理](docs/static_map_filter_20261015.md)。已有关键帧按 7.2.4 节重新生成时，也默认调用相同 C++ 过滤器；使用 HBA 新位姿时会先按新位姿重新判断，再同时生成 PCD 与二维图。
+
 回环需要实际移动后重访已观测区域并通过确认条件，原地静止不能验证闭环效果。更多参数见 [在线三维回环建图](docs/online_pgo_mapping_20261015.md)。
+
+### 5.10 无路径自转与占墙退让
+
+仿真和实机的三维先验／探索导航使用相同恢复逻辑，默认启用，无需修改原启动指令。仅建图入口不启动这套自动动作。
+
+- 有导航任务但连续 8 秒未前进至少 0.20 m：确认实时雷达的旋转净空后，以 0.35 rad/s 原地转约 180°，最长 12 秒，再重新规划原目标。既处理无路径，也处理有路径但控制器一直走不动。
+- 局部代价地图认为车体轴心落在碰撞区，持续 1 秒：从各方向选择已观测、实时雷达有净空、能够减小地图碰撞深度的空地，以 0.08 m/s 退让。支持麦轮横移；离开碰撞区即停，单次最多 0.40 m／8 秒。方向由空地位置决定。
+- 恢复时取消当前 Nav2 动作，结束后保留同一个目标重新发送；探索器暂停切换目标。两次恢复间隔至少 8 秒，无正常前进时最多尝试 3 次。
+- 暂停、急停、地图回环修正、雷达／里程计／代价地图过期都会中止恢复。未知或雷达未观测的方向不作为退让通道；没有安全方向时停车。保留受击自旋功能，退让期间暂时禁止旋转，防止贴墙转动。
+
+参数位于 `src/rm_bringup/real_bringup/config/real_nav2_params_3d.yaml` 的 `spin_navigation_adapter.ros__parameters`，通过原启动命令中的 `param_file` 加载，修改后重启导航：
+
+| 参数（均带 `recovery.` 前缀） | 默认值 | 含义 |
+|---|---|---|
+| `enabled` | `true` | 导航入口启用自动恢复 |
+| `no_path_timeout` | `8.0` | 无有效进展的等待时间，秒 |
+| `progress_distance` | `0.20` | 重置无进展计时／重试次数所需平移，米 |
+| `overlap_timeout` | `1.0` | 占墙确认时间，秒 |
+| `spin_speed` | `0.35` | 恢复自转速度，rad/s；与受击自旋参数分开 |
+| `spin_angle` | `3.141592653589793` | 恢复自转角度，rad，按真实 LIO 朝向累计 |
+| `spin_timeout` | `12.0` | 单次自转最长时间，秒 |
+| `retreat_speed` | `0.08` | 退让速度，m/s |
+| `retreat_distance` | `0.40` | 单次退让上限，米 |
+| `retreat_timeout` | `8.0` | 单次退让最长时间，秒 |
+| `radius` | `0.47` | 实时雷达检查的车体包络半径，米 |
+| `cooldown` | `8.0` | 两次恢复间隔，秒 |
+| `max_attempts` | `3` | 无正常前进时的恢复次数上限 |
+
+```bash
+ros2 topic echo /navigation/recovery_status
+ros2 topic echo /navigation/client/status
+```
+
+界面显示“自动脱困 / 重新规划”。`blocked` 表示没有安全退让方向，`rotation_blocked` 表示旋转范围内有障碍，`exhausted` 表示达到次数上限，不再自动恢复；人工处理后暂停并重新开始可重置次数。恢复不能修复错误地图或定位漂移。实现和仿真验证见 [导航自动恢复](docs/navigation_recovery_20261015.md)。
+
+### 5.11 长走廊建图错位与前端诊断
+
+实机与仿真 LIO 现在都保留 25 m 内的点，`lidar_filter_num: 1`，再按 0.05 m 体素降采样。原来的 10 m 截断与隔点抽样可能丢掉走廊远处端墙、转角等少量关键约束，往返时出现沿走廊方向的距离漂移。仅增加回环或修改 MPPI 不能补回这些观测。
+
+对应配置为 `src/rm_lio/FASTLIO2_ROS2/fastlio2/config/lio.yaml`（实机）和 `src/rm_bnrobot_nav/config/lio_sim.yaml`（仿真），由启动参数 `lio_config` 指定。已同步编译安装，重启原建图／探索命令生效；自行传入其他 `lio_config` 时需同步检查这两个参数。该调整不直接改变局部避障的扫描范围。
+
+同时修正了水平导航 TF 与点云的滚转／俯仰／高度转换，避免底盘颠簸时把未补偿的点云按水平位姿拼接；匹配失败时保留 IMU 预测及其协方差，且不向 FAST-LIO 内部匹配地图插入失败帧。匹配缓存按实际点数分配，并修正并行特征标记的数据竞争。
+
+```bash
+ros2 topic echo /fastlio2/tracking_status
+ros2 topic echo /pgo/status
+```
+
+`effective_points` 为当前有效平面匹配点数；`translation_eigen_ratio` 为平移信息矩阵最小／最大特征值比，小于 0.01 时 `weak_translation=true`，提示至少一个平移方向约束较弱。`measurement_updated=false` 表示当前未成功完成激光更新。它是退化诊断，不是新增轮速融合；完全缺少端面、转角或立柱等约束时仍可能漂移。
+
+左侧走廊实际 Gazebo 往返约 12.16 m 的对照测试中，原配置 LIO 最大位置误差约 4.44 m；调整范围与密度后，参数对照和完整修正版均降至约 0.2 m 量级。结果只代表此次仿真路线，不能作为实机精度保证。已经错位的地图需要重新采集，参数不会自动修复历史漂移。详见 [长走廊建图修正](docs/corridor_mapping_20261015.md)。
 
 ## 6. 重定位与状态检查
 
@@ -726,10 +721,13 @@ source install/setup.bash
 ros2 launch livox_ros_driver2 msg_MID360_launch.py
 ```
 
-**终端 B：FAST-LIO＋PGO，包含 RViz。** 此 launch 已包含 FAST-LIO，不能再重复启动 `lio_launch.py`：
+**终端 B：FAST-LIO＋在线 PGO，包含 RViz 和实机安装 TF。** 使用与 5.9 节相同的仅建图入口；终端 A 已启动雷达，因此关闭重复驱动。此入口已包含 FAST-LIO，不能同时运行 `lio_launch.py` 或旧的 `pgo_launch.py`：
 
 ```bash
-ros2 launch pgo pgo_launch.py
+ros2 launch real_bringup mapping_3d.launch.py \
+  backend:=real \
+  start_lidar:=false \
+  use_rviz:=true
 ```
 
 **终端 C：检查数据并录包。** 先确认点云、IMU 持续更新，启动后让车静止至少 5 秒，等待 `IMU initialized`；在第一帧建图的位置和朝向做物理标记，后续放回这个位置用于初始定位：
@@ -746,7 +744,7 @@ ros2 bag record -o "$SITE_DIR/bags/mapping" \
   /tf /tf_static /rosout
 ```
 
-慢速走遍需要导航的通道和房间，转向观测后方与遮挡区域。尽量形成闭环再回到起点。默认 PGO 回环要求旧帧与当前帧相隔超过 60 秒、搜索半径约 1 m；需实际走一圈后返回，停车等一分钟不等于回环完成。回访时低速经过多个关键帧，满足连续匹配确认后再停车；检查 RViz 是否有明显重影或墙体错位。
+慢速走遍需要导航的通道和房间，转向观测后方与遮挡区域。尽量形成闭环再回到起点。当前在线 PGO 默认要求旧帧与当前帧相隔超过 15 秒、轨迹间距至少 4 m、关键帧间隔至少 15 帧，搜索半径约 2.5 m，并需连续两次匹配确认；停车等待不等于回环完成。回访时低速经过多个关键帧，检查 `/pgo/status` 和 RViz 中是否有明显重影或墙体错位。
 
 #### 7.2.3 保存原始三维地图和观测轨迹
 
@@ -774,7 +772,7 @@ bags/mapping/    原始采集记录
 
 #### 7.2.4 生成可导航且对齐的 PCD／二维地图
 
-使用当前工具，按每帧最终位姿变换 PCD，并投影实际观测射线。未知背景保留为灰色，不把 PCD 包围框里的所有无点区域都当自由空间：
+使用当前工具，先按每帧最终位姿进行三维动态点一致性清理，再从同一清理结果生成 PCD 并投影实际观测射线。未知背景保留为灰色，不把 PCD 包围框里的所有无点区域都当自由空间：
 
 ```bash
 python tools/build_prior_map.py \
@@ -798,6 +796,10 @@ xdg-open "$SITE_DIR/prior/map.pgm"
 #### 7.2.5 可选：HBA 离线优化后重新生成地图
 
 没有重影且地图质量合格时可跳过。HBA 使用完整关键帧，默认窗口为 20 帧；短采集不适合直接使用默认优化设置。
+
+HBA 更新后先执行 `colcon build --packages-select hba` 并重新加载 `install/setup.bash`。本项目默认 `hba/config/hba.yaml` 中 `planar: true`，与平面 PGO／二维导航保持一致，只优化 yaw／x／y；一般三维数据可设置 `planar: false`。新版会拒绝缺失点云、格式错误和不足窗口的数据，优化成功前不能保存位姿；加载失败不会覆盖上次成功结果。
+
+**HBA 执行完成不等于地图质量改善。** 本次仿真流程已完成采集、优化、成对重建和 Nav2 规划，但这组走廊数据的 HBA 结果几何误差增大，建议选用 `prior`。保留原始数据和优化前地图，对照墙体／门框后再决定是否使用 `prior_hba`。结果与限制见 [HBA 仿真验证](docs/hba_sim_20261015.md)。
 
 **终端 B（已停 PGO 后）：**
 
@@ -932,9 +934,6 @@ ros2 launch real_bringup real_nav_3d_total.launch.py \
   navigation_mode:=prior \
   localizer_backend:=gicp \
   localizer_accumulation_seconds:=0.5 \
-  slam_params_file:="$PWD/src/rm_bringup/real_bringup/config/exploration_slam.yaml" \
-  pgo_params_file:="$PWD/src/rm_bringup/real_bringup/config/exploration_pgo.yaml" \
-  exploration_params_file:="$PWD/src/rm_bringup/real_bringup/config/exploration.yaml" \
   use_ui:=true \
   patrol_mode:=test \
   patrol_file:="$SITE_DIR/patrol_test.yaml" \
@@ -946,20 +945,11 @@ ros2 launch real_bringup real_nav_3d_total.launch.py \
   initial_pose_x:="$NAV_INITIAL_X" \
   initial_pose_y:="$NAV_INITIAL_Y" \
   initial_pose_yaw:="$NAV_INITIAL_YAW" \
-  use_nav_plan:=true \
-  use_sim_time:=false \
-  use_fast_lio:=true \
   param_file:="$PWD/src/rm_bringup/real_bringup/config/real_nav2_params_3d.yaml" \
   lio_config:="$PWD/src/rm_lio/FASTLIO2_ROS2/fastlio2/config/lio.yaml" \
   model:="$PWD/src/rm_bnrobot_sim/urdf/bngu_sentinel/bnbot_real.xacro" \
-  namespace:="" \
-  params_file:="$PWD/src/rm_bringup/real_bringup/config/real_nav2_params_3d.yaml" \
-  autostart:=true \
-  use_composition:=False \
-  container_name:=nav2_container \
   use_respawn:=False \
-  log_level:=info \
-  backend:=real
+  log_level:=info
 ```
 
 停止测试入口后，正式模式使用对应角色文件，并等待实际比赛状态／裁判信息选择目标：
@@ -969,9 +959,6 @@ ros2 launch real_bringup real_nav_3d_total.launch.py \
   navigation_mode:=prior \
   localizer_backend:=gicp \
   localizer_accumulation_seconds:=0.5 \
-  slam_params_file:="$PWD/src/rm_bringup/real_bringup/config/exploration_slam.yaml" \
-  pgo_params_file:="$PWD/src/rm_bringup/real_bringup/config/exploration_pgo.yaml" \
-  exploration_params_file:="$PWD/src/rm_bringup/real_bringup/config/exploration.yaml" \
   use_ui:=true \
   patrol_mode:=formal \
   patrol_file:="$SITE_DIR/patrol_formal.yaml" \
@@ -983,27 +970,14 @@ ros2 launch real_bringup real_nav_3d_total.launch.py \
   initial_pose_x:="$NAV_INITIAL_X" \
   initial_pose_y:="$NAV_INITIAL_Y" \
   initial_pose_yaw:="$NAV_INITIAL_YAW" \
-  use_nav_plan:=true \
-  use_sim_time:=false \
-  use_fast_lio:=true \
   param_file:="$PWD/src/rm_bringup/real_bringup/config/real_nav2_params_3d.yaml" \
   lio_config:="$PWD/src/rm_lio/FASTLIO2_ROS2/fastlio2/config/lio.yaml" \
   model:="$PWD/src/rm_bnrobot_sim/urdf/bngu_sentinel/bnbot_real.xacro" \
-  namespace:="" \
-  params_file:="$PWD/src/rm_bringup/real_bringup/config/real_nav2_params_3d.yaml" \
-  autostart:=true \
-  use_composition:=False \
-  container_name:=nav2_container \
   use_respawn:=False \
-  log_level:=info \
-  backend:=real
+  log_level:=info
 ```
 
 这些文件使用绝对启动参数，不必复制进 install 或重新编译地图包。场地归档至少保留：原始 rosbag、PGO patches/poses、选用的配对 PCD/PGM/YAML、`start_pose.env` 和巡检文件。
-
-### 局部贴墙通行与窄通道排查
-
-三维导航共用配置的局部膨胀衰减系数已设为 `30.0`，允许碰撞边界外的代价快速下降；`inflation_radius=0.5` 和自旋碰撞包络仍保留。修改已运行节点的 YAML 不会立即生效，需要重新启动。窄通道复测、NavFn 路径提取失败与定位发散记录见 [排查说明](docs/narrow_passage_20261014.md)。
 
 ### 7.3 受击自旋与导航同时运行
 

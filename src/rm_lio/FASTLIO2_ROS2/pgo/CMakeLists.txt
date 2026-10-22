@@ -40,7 +40,8 @@ include_directories(
 )
 
 set(SRC_LIST src/pgos/commons.cpp
-             src/pgos/simple_pgo.cpp)
+             src/pgos/simple_pgo.cpp
+             src/pgos/static_map_filter.cpp)
 
 add_library(pgo_backend STATIC ${SRC_LIST})
 target_link_libraries(pgo_backend ${PCL_LIBRARIES} gtsam)
@@ -53,7 +54,11 @@ add_executable(online_pgo_node src/online_pgo_node.cpp)
 ament_target_dependencies(online_pgo_node rclcpp std_msgs sensor_msgs nav_msgs message_filters pcl_conversions tf2_ros geometry_msgs interface)
 target_link_libraries(online_pgo_node pgo_backend ${PCL_LIBRARIES} gtsam yaml-cpp)
 
-install(TARGETS online_pgo_node pgo_node DESTINATION lib/${PROJECT_NAME})
+add_executable(static_map_filter src/static_map_filter_main.cpp)
+ament_target_dependencies(static_map_filter nav_msgs)
+target_link_libraries(static_map_filter pgo_backend ${PCL_LIBRARIES} gtsam yaml-cpp)
+
+install(TARGETS static_map_filter online_pgo_node pgo_node DESTINATION lib/${PROJECT_NAME})
 install(DIRECTORY launch DESTINATION share/${PROJECT_NAME})
 install(DIRECTORY config DESTINATION share/${PROJECT_NAME})
 install(DIRECTORY rviz DESTINATION share/${PROJECT_NAME})
@@ -66,6 +71,11 @@ if(BUILD_TESTING)
   ament_target_dependencies(online_mapping_test nav_msgs)
   target_link_libraries(online_mapping_test pgo_backend ${PCL_LIBRARIES} gtsam)
   add_test(NAME online_mapping_test COMMAND online_mapping_test)
+  add_executable(static_map_filter_test test/static_map_filter_test.cpp)
+  target_include_directories(static_map_filter_test PRIVATE src)
+  ament_target_dependencies(static_map_filter_test nav_msgs)
+  target_link_libraries(static_map_filter_test pgo_backend ${PCL_LIBRARIES} gtsam yaml-cpp)
+  add_test(NAME static_map_filter_test COMMAND static_map_filter_test)
   find_package(ament_lint_auto REQUIRED)
   # the following line skips the linter which checks for copyrights
   # comment the line when a copyright and license is added to all source files

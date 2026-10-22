@@ -19,7 +19,7 @@ inline nav_msgs::msg::OccupancyGrid buildOccupancy(const std::vector<KeyPoseWith
     double minx=std::numeric_limits<double>::infinity(), miny=minx, maxx=-minx,maxy=-minx;
     auto bound=[&](const V3D &p){minx=std::min(minx,p.x());miny=std::min(miny,p.y());maxx=std::max(maxx,p.x());maxy=std::max(maxy,p.y());};
     for (const auto &f:frames) {
-        Observation obs;obs.origin=f.r_global*V3D(.22157,0,.33018)+f.t_global;obs.base=f.t_global;
+        Observation obs;obs.origin=f.r_global*V3D(0,.22157,.33018)+f.t_global;obs.base=f.t_global;
         bound(obs.origin);bound(obs.base);
         for(const auto &p:*f.body_cloud) {
             V3D point=f.r_global*p.getVector3fMap().cast<double>()+f.t_global;

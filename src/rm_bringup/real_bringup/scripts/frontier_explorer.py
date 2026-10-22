@@ -30,6 +30,8 @@ class FrontierExplorer(Node):
         self.blacklist_duration=float(self.declare_parameter('blacklist_duration',180.).value)
         if not all(math.isfinite(v) and v>0 for v in [self.clearance,self.min_distance,self.timeout,self.blacklist_duration]) or self.min_cells<1:raise ValueError('Invalid exploration parameters')
         self.buffer=Buffer();self.listener=TransformListener(self.buffer,self)
+        self.recovering=False
+        self.create_subscription(Bool,'/navigation/recovery_active',self.recovery_cb,QoSProfile(depth=1,durability=DurabilityPolicy.TRANSIENT_LOCAL,reliability=ReliabilityPolicy.RELIABLE))
         self.map=None;self.map_receipt=0.;self.map_started=None;self.costmap=None;self.costmap_receipt=0.;self.motion_receipt=-float("inf");self.invalid_ticks=0;self.client=None;self.client_receipt=0.
         self.need_clear=False;self.clear_future=None
         self.destination=None;self.destination_done=False;self.selected_is_destination=False
@@ -44,6 +46,10 @@ class FrontierExplorer(Node):
         self.create_subscription(Costmap,'/global_costmap/costmap_raw',self.receive_costmap,1)
         self.create_subscription(UInt8MultiArray,'/can_twist/command_frame',lambda m:setattr(self,'motion_receipt',self.now_seconds()) if len(m.data)==8 else None,1)
         self.create_timer(1.,self.tick)
+    def recovery_cb(self,msg):
+        if self.recovering and not msg.data:self.selected_time=self.now_seconds();self.invalid_ticks=0
+        self.recovering=msg.data
+
     def mapping_cb(self,msg):
         if msg.data and not self.mapping_ready:self.mapping_ready_since=self.now_seconds()
         if not msg.data and self.mapping_ready:
@@ -75,6 +81,7 @@ class FrontierExplorer(Node):
         if self.client is None or not 0<=now-self.client_receipt<2.:self.status('waiting_client');return
         if self.client.mode not in ('explore','explore_goal'):self.selected=None;self.status('inactive');return
         if self.client.paused or self.client.emergency_stop:self.status('paused');return
+        if self.recovering:self.status('recovering');return
         if self.destination_done:self.status('destination_reached');return
         if self.client.mode=='explore_goal' and self.destination is None:self.status('waiting_destination');return
         if self.need_clear:

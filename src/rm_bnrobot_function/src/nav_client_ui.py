@@ -97,8 +97,12 @@ class NavigationConsole(W.QMainWindow):
         self.status_timer=QtCore.QTimer(self);self.status_timer.timeout.connect(self.refresh_pose);self.status_timer.start(200)
         default=node.declare_parameter('patrol_file',str(Path(get_package_share_directory('nav_plan'))/'config/patrol/custom_room_test.yaml')).value
         navigation_mode=node.declare_parameter('navigation_mode','prior').value
+        start_empty=node.declare_parameter('ui_start_empty',False).value
         if navigation_mode=='explore':
             self.mode.setCurrentIndex(self.mode.findData('explore'));self.file.clear();self.note('无先验地图模式：等待 SLAM 地图，目标由探索器自动生成')
+        elif start_empty:
+            self.mode.setCurrentIndex(self.mode.findData('manual'));self.file.clear();self.loop.setChecked(False)
+            self.note('目标列表为空。请添加目标点或双击地图设置目标，点击开始后执行；多个点可选择按列表巡检。')
         elif Path(default).is_file():self.load_file(default)
         self.explore_sub=node.create_subscription(String,'/exploration/status',self.receive_exploration,10)
     def build_ui(self):
@@ -273,7 +277,7 @@ class NavigationConsole(W.QMainWindow):
     def receive_map(self,msg):self.map_view.show_map(msg)
     def receive_status(self,msg):
         self.last_status=time.monotonic()
-        labels={'waiting_mapping':'等待回环地图重建','waiting':'等待目标 / 停留','waiting_server':'等待 Nav2','waiting_motion':'等待底盘仲裁','waiting_localization':'等待定位','sending':'发送目标','executing':'导航中','complete':'已完成','failed':'导航失败','rejected':'目标被拒绝','paused':'已暂停','stopped':'已取消','ready':'配置就绪','emergency':'急停'}
+        labels={'recovering':'自动脱困 / 重新规划','waiting_mapping':'等待回环地图重建','waiting':'等待目标 / 停留','waiting_server':'等待 Nav2','waiting_motion':'等待底盘仲裁','waiting_localization':'等待定位','sending':'发送目标','executing':'导航中','complete':'已完成','failed':'导航失败','rejected':'目标被拒绝','paused':'已暂停','stopped':'已取消','ready':'配置就绪','emergency':'急停'}
         self.state_label.setText('任务状态：'+labels.get(msg.state,msg.state))
         self.state_label.setToolTip(msg.message)
         key=(msg.mode,msg.state,msg.point_name,msg.target.goal_x,msg.target.goal_y)

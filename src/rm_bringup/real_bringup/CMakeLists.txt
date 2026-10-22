@@ -33,6 +33,6 @@ endif()
 install(DIRECTORY behavior_trees config launch rviz
 DESTINATION share/${PROJECT_NAME})
 
-install(PROGRAMS scripts/accumulated_scan.py scripts/spin_navigation_adapter.py scripts/sim_can_bridge.py scripts/frontier_explorer.py scripts/frontier_planner.py DESTINATION lib/${PROJECT_NAME})
+install(PROGRAMS scripts/navigation_recovery.py scripts/accumulated_scan.py scripts/spin_navigation_adapter.py scripts/sim_can_bridge.py scripts/frontier_explorer.py scripts/frontier_planner.py DESTINATION lib/${PROJECT_NAME})
 
 ament_package()

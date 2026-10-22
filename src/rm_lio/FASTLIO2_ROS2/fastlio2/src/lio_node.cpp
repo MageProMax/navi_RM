@@ -21,6 +21,10 @@
 #include <nav_msgs/msg/odometry.hpp>
 #include <geometry_msgs/msg/pose_stamped.hpp>
 #include <yaml-cpp/yaml.h>
+#include <std_msgs/msg/string.hpp>
+#include <sstream>
+#include <iomanip>
+#include "map_builder/planar_projection.h"
 
 using namespace std::chrono_literals;
 struct NodeConfig
@@ -73,6 +77,7 @@ public:
         m_world_cloud_pub = this->create_publisher<sensor_msgs::msg::PointCloud2>("world_cloud", 10000);
         m_path_pub = this->create_publisher<nav_msgs::msg::Path>("lio_path", 10000);
         m_odom_pub = this->create_publisher<nav_msgs::msg::Odometry>("lio_odom", 10000);
+        m_tracking_pub = this->create_publisher<std_msgs::msg::String>("tracking_status", 10);
         m_tf_broadcaster = std::make_shared<tf2_ros::TransformBroadcaster>(*this);
 
         m_state_data.path.poses.clear();
@@ -359,6 +364,11 @@ public:
         if (m_builder->status() != BuilderStatus::MAPPING)
             return;
 
+        M3D r_full,r_planar,r_cloud;V3D t_full,t_planar,t_cloud;
+        getBasePose(r_full,t_full);getPlanarBasePose(r_planar,t_planar);
+        if(!m_have_height_reference){m_initial_base_z=t_full.z();m_have_height_reference=true;}
+        planarCloudTransform(r_full,t_full,r_planar,t_planar,m_initial_base_z,r_cloud,t_cloud);
+
         broadCastTF(m_tf_broadcaster, m_node_config.world_frame, m_node_config.body_frame, m_package.cloud_end_time);
 
         publishOdometry(m_odom_pub, m_node_config.world_frame, m_node_config.body_frame, m_package.cloud_end_time);
@@ -370,14 +380,22 @@ public:
             m_package.cloud, m_kf->x().r_il, m_kf->x().t_il);
         CloudType::Ptr body_cloud = m_builder->lidar_processor()->transformCloud(
             imu_cloud, m_node_config.r_bi, m_node_config.t_bi);
+        body_cloud=m_builder->lidar_processor()->transformCloud(body_cloud,r_cloud,t_cloud);
 
         publishCloud(m_body_cloud_pub, body_cloud, m_node_config.body_cloud_frame, m_package.cloud_end_time);
 
-        CloudType::Ptr world_cloud = m_builder->lidar_processor()->transformCloud(m_package.cloud, m_builder->lidar_processor()->r_wl(), m_builder->lidar_processor()->t_wl());
+        CloudType::Ptr world_cloud = m_builder->lidar_processor()->transformCloud(body_cloud,r_planar,t_planar);
 
         publishCloud(m_world_cloud_pub, world_cloud, m_node_config.world_frame, m_package.cloud_end_time);
 
         publishPath(m_path_pub, m_node_config.world_frame, m_package.cloud_end_time);
+        const auto processor=m_builder->lidar_processor();
+        std::ostringstream detail;
+        detail<<std::setprecision(16)<<"{\"stamp\":"<<m_package.cloud_end_time<<",\"effective_points\":"<<processor->effective_points()
+              <<",\"translation_eigen_ratio\":"<<processor->translation_condition_ratio()
+              <<",\"weak_translation\":"<<(processor->translation_condition_ratio()<.01?"true":"false")
+              <<",\"measurement_updated\":"<<(processor->measurement_updated()?"true":"false")<<"}";
+        std_msgs::msg::String tracking;tracking.data=detail.str();m_tracking_pub->publish(tracking);
     }
 
 private:
@@ -388,6 +406,9 @@ private:
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr m_world_cloud_pub;
     rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr m_path_pub;
     rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr m_odom_pub;
+    rclcpp::Publisher<std_msgs::msg::String>::SharedPtr m_tracking_pub;
+    bool m_have_height_reference=false;
+    double m_initial_base_z=0.;
 
     rclcpp::TimerBase::SharedPtr m_timer;
     rclcpp::CallbackGroup::SharedPtr m_sensor_cb_group;

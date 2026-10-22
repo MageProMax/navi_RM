@@ -18,9 +18,10 @@
     
     <!-- 传感器 -->
     <xacro:laser_xacro xyz="0 0 0.257" />
-    <!-- Mid-360 FOV 原点：base_link 以地面为 z=0，云台在 URDF 中简化为 base_link。 -->
+    <!-- Mid-360 FOV 原点：车体左侧 0.22157 m，无前向偏移；base_link 以地面为 z=0。
+         雷达 x 轴向前，z 轴向左上方，沿用约 45 度倾角（roll=-0.7854）。 -->
     <xacro:mid360 name="mid360" topic="/livox/lidar">
-        <origin xyz="0.22157 0 0.33018" rpy="0 0.7854 0" />
+        <origin xyz="0 0.22157 0.33018" rpy="-0.7854 0 0" />
     </xacro:mid360>
 
     <!-- 兼容 Livox 驱动的点云 frame id。 -->
@@ -36,7 +37,7 @@
     <joint name="base_to_livox_imu" type="fixed">
         <parent link="base_link" />
         <child link="livox_imu" />
-        <origin xyz="0.198150552 0.02329 0.291204317" rpy="0 0.7854 0" />
+        <origin xyz="0.011000000 0.206840878 0.282513959" rpy="-0.7854 0 0" />
     </joint>
     <!-- <xacro:imu_xacro xyz="0 0 0.02" /> -->
     <!-- <xacro:imu_xacro xyz="0 0 0.02" /> -->

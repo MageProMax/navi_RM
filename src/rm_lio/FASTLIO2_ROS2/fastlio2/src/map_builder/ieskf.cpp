@@ -75,46 +75,61 @@ void IESKF::predict(const Input &inp, double dt, const M12D &Q)
     m_P = m_F * m_P * m_F.transpose() + m_G * Q * m_G.transpose();
 }
 
-void IESKF::update()
+bool IESKF::update()
 {
     State predict_x = m_x;
+    const M21D predict_P = m_P;
+    Eigen::LDLT<M21D> prior_solver(m_P);
+    if (prior_solver.info()!=Eigen::Success || !prior_solver.isPositive())return false;
+    const M21D prior_information=prior_solver.solve(M21D::Identity());
     SharedState shared_data;
     shared_data.iter_num = 0;
     shared_data.res = 1e10;
     V21D delta = V21D::Zero();
     M21D H = M21D::Identity();
     V21D b;
+    bool updated=false;
 
     for (size_t i = 0; i < m_max_iter; i++)
     {
         m_loss_func(m_x, shared_data);
-        if (!shared_data.valid)
-            break;
+        if (!shared_data.valid || !shared_data.H.allFinite() || !shared_data.b.allFinite())
+        {
+            m_x=predict_x;m_P=predict_P;
+            return false;
+        }
         H.setZero();
         b.setZero();
         delta = m_x - predict_x;
         M21D J = M21D::Identity();
         J.block<3, 3>(0, 0) = JrInv(delta.segment<3>(0));
         J.block<3, 3>(6, 6) = JrInv(delta.segment<3>(6));
-        H += J.transpose() * m_P.inverse() * J;
-        b += J.transpose() * m_P.inverse() * delta;
+        H += J.transpose() * prior_information * J;
+        b += J.transpose() * prior_information * delta;
 
         H.block<12, 12>(0, 0) += shared_data.H;
         b.block<12, 1>(0, 0) += shared_data.b;
 
-        delta = -H.inverse() * b;
+        Eigen::LDLT<M21D> solver(H);
+        if(solver.info()!=Eigen::Success || !solver.isPositive()) {m_x=predict_x;m_P=predict_P;return false;}
+        delta = -solver.solve(b);
+        if(!delta.allFinite()) {m_x=predict_x;m_P=predict_P;return false;}
 
         m_x += delta;
         shared_data.iter_num += 1;
+        updated=true;
 
         if (m_stop_func(delta))
             break;
     }
 
+    if(!updated)return false; // No measurement must not reset P to identity.
     M21D L = M21D::Identity();
     // L.block<3, 3>(0, 0) = JrInv(delta.segment<3>(0));
     // L.block<3, 3>(6, 6) = JrInv(delta.segment<3>(6));
     L.block<3, 3>(0, 0) = Jr(delta.segment<3>(0));
     L.block<3, 3>(6, 6) = Jr(delta.segment<3>(6));
-    m_P = L * H.inverse() * L.transpose();
+    m_P = L * H.ldlt().solve(M21D::Identity()) * L.transpose();
+    m_P = .5*(m_P+m_P.transpose()).eval();
+    return true;
 }

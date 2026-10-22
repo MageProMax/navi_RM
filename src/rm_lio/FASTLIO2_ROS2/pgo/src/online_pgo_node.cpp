@@ -21,7 +21,10 @@
 #include <optional>
 #include <fstream>
 #include <sstream>
+#include <map>
+#include <algorithm>
 #include "pgos/occupancy_builder.h"
+#include "pgos/map_export.h"
 using namespace std::chrono_literals;
 
 class OnlinePGO : public rclcpp::Node {
@@ -50,6 +53,20 @@ public:
         grid_config_.minimum_z=declare_parameter("min_obstacle_height",.1);
         grid_config_.maximum_z=declare_parameter("max_obstacle_height",1.5);
         grid_config_.ground_z=declare_parameter("min_ground_height",-.15);
+        filter_config_.enabled=declare_parameter("static_filter.enabled",true);
+        filter_config_.voxel_size=declare_parameter("static_filter.voxel_size",.10);
+        filter_config_.endpoint_margin=declare_parameter("static_filter.endpoint_margin",.20);
+        filter_config_.min_observation_interval=declare_parameter("static_filter.min_observation_interval",.5);
+        filter_config_.min_free_observations=declare_parameter("static_filter.min_free_observations",3);
+        filter_config_.free_to_hit_ratio=declare_parameter("static_filter.free_to_hit_ratio",3.);
+        filter_config_.max_range=declare_parameter("static_filter.max_range",10.);
+        const int voxels=declare_parameter("static_filter.maximum_voxels",2000000);
+        const int steps=declare_parameter("static_filter.maximum_ray_steps",60000000);
+        if(voxels<100||steps<100)throw std::invalid_argument("Invalid filter resource bounds");
+        filter_config_.maximum_voxels=voxels;filter_config_.maximum_ray_steps=steps;
+        validateStaticFilter(filter_config_);
+        stationary_interval_=declare_parameter("static_filter.stationary_observation_interval",1.);
+        if(!std::isfinite(stationary_interval_)||stationary_interval_<.5)throw std::invalid_argument("Invalid stationary observation interval");
         const double period=declare_parameter("map_update_interval",1.);
         if(c.key_pose_delta_trans<=0||c.key_pose_delta_deg<=0||c.loop_search_radius<=0||c.loop_time_tresh<=0||
            c.loop_score_tresh<=0||c.loop_confirmations<2||c.loop_min_index_separation<5||c.submap_resolution<=0||
@@ -62,6 +79,7 @@ public:
         map_pub_=create_publisher<nav_msgs::msg::OccupancyGrid>("/map",retained);
         ready_pub_=create_publisher<std_msgs::msg::Bool>("/pgo/map_ready",rclcpp::QoS(10).reliable().transient_local());
         status_pub_=create_publisher<std_msgs::msg::String>("/pgo/status",retained);
+        filter_pub_=create_publisher<std_msgs::msg::String>("/pgo/static_filter_status",retained);
         path_pub_=create_publisher<nav_msgs::msg::Path>("/pgo/optimized_path",retained);
         tf_=std::make_shared<tf2_ros::TransformBroadcaster>(*this);
         auto qos=rclcpp::QoS(10).get_rmw_qos_profile();
@@ -127,16 +145,40 @@ private:
         if(key) {
             pgo_->searchForLoopPairs();const bool loop=pgo_->hasLoop();
             if(loop){std::lock_guard<std::mutex> commit_lock(map_mutex_);++revision_;setReady(false);RCLCPP_INFO(get_logger(),"Accepted 3D loop; rebuilding all historical occupancy, revision=%zu",revision_.load());}
-            pgo_->smoothAndUpdate();dirty_=true;
+            pgo_->smoothAndUpdate();dirty_=true;last_observation_time_=input->pose.second;
+        } else if(filter_config_.enabled && input->pose.second-last_observation_time_>=stationary_interval_) {
+            // Evidence while parked must not create odometry graph nodes. Keep
+            // up to six recent scans per anchor, at most 3000 extra scans total.
+            const auto anchor=pgo_->keyPoses().size()-1;
+            auto &observations=stationary_[anchor];
+            if(observations.size()>=6){observations.erase(observations.begin());--stationary_count_;}
+            if(stationary_count_<3000){observations.push_back(*input);++stationary_count_;dirty_=true;}
+            last_observation_time_=input->pose.second;
         }
         // Coalesce snapshots; a dedicated worker rebuilds the grid, never blocks TF.
         const double seconds=now().seconds();
         if(dirty_ && (seconds-last_map_request_>=map_period_||revision_.load()!=last_requested_revision_)) {
-            Snapshot snapshot{pgo_->keyPoses(),revision_.load(),pgo_->offsetR(),pgo_->offsetT()};
+            Snapshot snapshot{mappingObservations(),revision_.load(),pgo_->offsetR(),pgo_->offsetT()};
             {std::lock_guard<std::mutex> lock(map_mutex_);next_map_=std::move(snapshot);}
             condition_.notify_one();dirty_=false;last_map_request_=seconds;last_requested_revision_=revision_.load();
         }
         status("tracking",pgo_->keyPoses().size(),pgo_->historyPairs().size(),pgo_->loopStatus(),pgo_->lastInlierRatio());
+    }
+    std::vector<KeyPoseWithCloud> mappingObservations() {
+        auto frames=pgo_->keyPoses();
+        for(const auto &group:stationary_) {
+            const auto &anchor=pgo_->keyPoses().at(group.first);
+            for(const auto &scan:group.second) {
+                KeyPoseWithCloud f;
+                const M3D relative=anchor.r_local.transpose()*scan.pose.r;
+                const V3D offset=anchor.r_local.transpose()*(scan.pose.t-anchor.t_local);
+                f.r_global=anchor.r_global*relative;f.t_global=anchor.r_global*offset+anchor.t_global;
+                f.r_local=scan.pose.r;f.t_local=scan.pose.t;f.time=scan.pose.second;f.body_cloud=scan.cloud;
+                frames.push_back(f);
+            }
+        }
+        std::stable_sort(frames.begin(),frames.end(),[](const auto &a,const auto &b){return a.time<b.time;});
+        return frames;
     }
     void broadcast() {
         builtin_interfaces::msg::Time stamp;
@@ -165,19 +207,29 @@ private:
              if(stop_) return;
              snapshot=std::move(*next_map_);next_map_.reset();}
             try {
-                // The graph is constrained to the navigation plane when used
-                // for raster/TF, retaining original body clouds for saved PCD.
+                // Apply identical optimized planar poses to filtering, PCD and raster.
+                // Raw observations are retained separately for later reprocessing.
                 for(auto &f:snapshot.frames) {
                     const double yaw=std::atan2(f.r_global(1,0),f.r_global(0,0));
                     f.r_global=Eigen::AngleAxisd(yaw,V3D::UnitZ()).toRotationMatrix();f.t_global.z()=0.;
                 }
-                auto grid=buildOccupancy(snapshot.frames,grid_config_);
+                auto filtered=filterStaticMap(snapshot.frames,filter_config_);
+                auto grid=buildOccupancy(filtered.frames,grid_config_);
+                if(filtered.stats.state.find("budget")!=std::string::npos)
+                    RCLCPP_WARN_THROTTLE(get_logger(),*get_clock(),10000,"Static-map filter: %s (all points retained)",filtered.stats.state.c_str());
                 if(!rclcpp::ok()) return;
                 std::lock_guard<std::mutex> commit_lock(map_mutex_);
                 if(fault_ || snapshot.revision!=revision_.load())continue;
                 grid.header.stamp=now();grid.info.map_load_time=grid.header.stamp;
                 {std::lock_guard<std::mutex> lock(offset_mutex_);active_r_=snapshot.r;active_t_=snapshot.t;}
                 last_map_=std::make_shared<nav_msgs::msg::OccupancyGrid>(grid);last_map_revision_=snapshot.revision;
+                last_raw_frames_=snapshot.frames;last_filtered_=std::move(filtered);
+                std_msgs::msg::String filter_status;
+                const auto &fs=last_filtered_.stats;std::ostringstream detail;
+                detail<<"{\"state\":\""<<fs.state<<"\",\"input_points\":"<<fs.input_points
+                      <<",\"removed_points\":"<<fs.removed_points<<",\"removed_voxels\":"<<fs.removed_voxels
+                      <<",\"ray_steps\":"<<fs.ray_steps<<",\"revision\":"<<snapshot.revision<<"}";
+                filter_status.data=detail.str();filter_pub_->publish(filter_status);
                 map_pub_->publish(grid);
                 nav_msgs::msg::Path path;path.header=grid.header;
                 for(const auto &f:snapshot.frames) {
@@ -193,20 +245,32 @@ private:
         }
     }
     void save(const std::shared_ptr<interface::srv::SaveMaps::Request> req,std::shared_ptr<interface::srv::SaveMaps::Response> res) {
-        std::vector<KeyPoseWithCloud> frames;
-        {std::lock_guard<std::mutex> lock(graph_mutex_);frames=pgo_->keyPoses();}
-        if(frames.empty()||!std::filesystem::is_directory(req->file_path)){res->message="Directory must exist and mapping must contain keyframes";return;}
+        std::vector<KeyPoseWithCloud> raw;
+        StaticFilterResult filtered;nav_msgs::msg::OccupancyGrid grid;
+        {
+            std::lock_guard<std::mutex> lock(map_mutex_);
+            if(fault_ || !last_map_ || last_map_revision_!=revision_.load()) {
+                res->message="Wait for a committed map /pgo/map_ready before saving";return;
+            }
+            raw=last_raw_frames_;filtered=last_filtered_;grid=*last_map_;
+        }
+        if(filtered.frames.empty()||!std::filesystem::is_directory(req->file_path)) {
+            res->message="Directory must exist and mapping must contain keyframes";return;
+        }
         try {
-            const std::filesystem::path dir(req->file_path);CloudType merged;std::ofstream poses;
-            if(req->save_patches){std::filesystem::create_directories(dir/"patches");poses.open(dir/"poses.txt");if(!poses)throw std::runtime_error("Cannot write poses");}
-            for(std::size_t i=0;i<frames.size();++i){const auto &f=frames[i];CloudType world;
-                pcl::transformPointCloud(*f.body_cloud,world,f.t_global,Eigen::Quaterniond(f.r_global));merged+=world;
-                if(req->save_patches){const auto name=std::to_string(i)+".pcd";if(pcl::io::savePCDFileBinary((dir/"patches"/name).string(),*f.body_cloud)<0)throw std::runtime_error("Cannot write patch");
-                    Eigen::Quaterniond q(f.r_global);poses.precision(12);poses<<name<<' '<<f.t_global.transpose()<<' '<<q.w()<<' '<<q.x()<<' '<<q.y()<<' '<<q.z()<<'\n';}}
-            if(pcl::io::savePCDFileBinary((dir/"map.pcd").string(),merged)<0)throw std::runtime_error("Cannot write map");
-            res->success=true;res->message="SAVE SUCCESS!";
+            const std::filesystem::path dir(req->file_path);
+            // One committed snapshot supplies BOTH maps, including after loops.
+            // Patches stay RAW, so thresholds and optimized poses can be revisited.
+            if(req->save_patches)writePatches(dir,raw);
+            writePairedMap(dir,filtered,grid,filter_config_);
+            res->success=true;res->message="Saved paired static maps; filter="+filtered.stats.state+
+                ", removed_points="+std::to_string(filtered.stats.removed_points)+"; patches are raw";
         }catch(const std::exception &e){res->message=e.what();}
     }
+
+    StaticFilterConfig filter_config_;StaticFilterResult last_filtered_;std::vector<KeyPoseWithCloud> last_raw_frames_;
+    std::map<std::size_t,std::vector<CloudWithPose>> stationary_;std::size_t stationary_count_=0;
+    double stationary_interval_=1.,last_observation_time_=-1e9;
     std::shared_ptr<SimplePGO> pgo_;GridConfig grid_config_;int maximum_frames_;double map_period_,last_map_request_=-1e9,last_broadcast_clock_=0.;
     bool dirty_=false,have_stamp_=false,stop_=false;std::atomic<bool> fault_{false};std::atomic<std::size_t> revision_{0};std::size_t last_requested_revision_=0;
     std::mutex graph_mutex_,input_mutex_,map_mutex_,offset_mutex_;std::condition_variable condition_;std::thread worker_;
@@ -217,7 +281,7 @@ private:
     rclcpp::CallbackGroup::SharedPtr process_group_,tf_group_;rclcpp::TimerBase::SharedPtr process_timer_,tf_timer_,refresh_timer_;
     std::shared_ptr<tf2_ros::TransformBroadcaster> tf_;
     rclcpp::Publisher<nav_msgs::msg::OccupancyGrid>::SharedPtr map_pub_;rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr path_pub_;
-    rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr ready_pub_;rclcpp::Publisher<std_msgs::msg::String>::SharedPtr status_pub_;
+    rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr ready_pub_;rclcpp::Publisher<std_msgs::msg::String>::SharedPtr status_pub_,filter_pub_;
     rclcpp::Service<interface::srv::SaveMaps>::SharedPtr save_srv_;
 };
 int main(int argc,char **argv){rclcpp::init(argc,argv);auto node=std::make_shared<OnlinePGO>();rclcpp::executors::MultiThreadedExecutor executor(rclcpp::ExecutorOptions(),4);executor.add_node(node);executor.spin();node.reset();rclcpp::shutdown();}

@@ -230,13 +230,16 @@ local_costmap:
         observation_sources: scan
         scan:
           topic: /scan
+          # /scan endpoints are in base_link; ray origins are at the physical lidar.
+          sensor_frame: mid360
+          inf_is_valid: False  # Missing MID360 returns are not evidence of free space.
           max_obstacle_height: 2.0
           clearing: True
           marking: True
           data_type: "LaserScan"
           raytrace_max_range: 8.0
           raytrace_min_range: 0.0
-          obstacle_max_range: 5.0
+          obstacle_max_range: 10.0  # Preserve real hits throughout the clearing range.
           obstacle_min_range: 0.0
       static_layer:
         plugin: "nav2_costmap_2d::StaticLayer"
@@ -260,16 +263,23 @@ global_costmap:
       obstacle_layer:
         plugin: "nav2_costmap_2d::ObstacleLayer"
         enabled: True
+        # Observed free rays may overwrite stale prior obstacles. NO_INFORMATION
+        # cells preserve the static layer because track_unknown_space is true.
+        combination_method: 0
+        # Only measured rays may remove prior obstacles, not the robot footprint.
+        footprint_clearing_enabled: False
         observation_sources: scan
         scan:
           topic: /scan
+          sensor_frame: mid360
+          inf_is_valid: False
           max_obstacle_height: 2.0
           clearing: True
           marking: True
           data_type: "LaserScan"
           raytrace_max_range: 8.0
           raytrace_min_range: 0.0
-          obstacle_max_range: 5.0
+          obstacle_max_range: 10.0
           obstacle_min_range: 0.0
       static_layer:
         plugin: "nav2_costmap_2d::StaticLayer"
@@ -369,3 +379,20 @@ velocity_smoother:
     odom_duration: 0.1
     deadband_velocity: [0.0, 0.0, 0.0]
     velocity_timeout: 1.0
+
+
+spin_navigation_adapter:
+  ros__parameters:
+    recovery.enabled: true
+    recovery.no_path_timeout: 8.0
+    recovery.overlap_timeout: 1.0
+    recovery.spin_speed: 0.35
+    recovery.spin_angle: 3.141592653589793
+    recovery.spin_timeout: 12.0
+    recovery.retreat_speed: 0.08
+    recovery.retreat_distance: 0.40
+    recovery.retreat_timeout: 8.0
+    recovery.cooldown: 8.0
+    recovery.max_attempts: 3
+    recovery.radius: 0.47
+    recovery.progress_distance: 0.20

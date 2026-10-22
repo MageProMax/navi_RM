@@ -48,6 +48,8 @@ int main(){
  const auto old=buildOccupancy({f},GridConfig{});f.t_global.setZero();const auto corrected=buildOccupancy({f},GridConfig{});
  require(value(old,2.52,.52)==100,"test old wall missing");require(value(corrected,2.02,.52)==100,"corrected wall missing");
  require(value(corrected,2.52,.52)!=100,"old raster occupancy survived correction");
- require(value(corrected,1.02,.22)==0,"observed free ray missing");require(value(corrected,.1,-.3)==-1,"unobserved area cleared");
+ require(value(corrected,1.02,.37)==0,"left-mounted sensor free ray missing");
+ require(value(corrected,1.02,.22)==-1,"old front-mounted sensor ray cleared unobserved space");
+ require(value(corrected,.1,-.3)==-1,"unobserved area cleared");
  std::cout<<"PASS confirmed loop optimization, anchor, history rebuild and unrelated-scene rejection\n";
 }

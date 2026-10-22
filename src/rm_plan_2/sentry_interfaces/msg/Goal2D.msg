@@ -1,5 +1,0 @@
-std_msgs/Header header
-float32 x
-float32 y
-bool valid
-uint8 goal_type

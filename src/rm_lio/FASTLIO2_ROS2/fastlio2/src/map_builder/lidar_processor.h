@@ -30,6 +30,9 @@ public:
     static CloudType::Ptr transformCloud(CloudType::Ptr inp, const M3D &r, const V3D &t);
     M3D r_wl() { return m_kf->x().r_wi * m_kf->x().r_il; }
     V3D t_wl() { return m_kf->x().t_wi + m_kf->x().r_wi * m_kf->x().t_il; }
+    int effective_points() const { return m_effective_points; }
+    double translation_condition_ratio() const { return m_translation_ratio; }
+    bool measurement_updated() const { return m_measurement_updated; }
 
 private:
     Config m_config;
@@ -39,7 +42,11 @@ private:
     CloudType::Ptr m_cloud_lidar;
     CloudType::Ptr m_cloud_down_lidar;
     CloudType::Ptr m_cloud_down_world;
-    std::vector<bool> m_point_selected_flag;
+    // vector<bool> packs adjacent entries into a word; parallel writers race.
+    std::vector<uint8_t> m_point_selected_flag;
+    int m_effective_points=0;
+    double m_translation_ratio=0.;
+    bool m_measurement_updated=false;
     CloudType::Ptr m_norm_vec;
     CloudType::Ptr m_effect_cloud_lidar;
     CloudType::Ptr m_effect_norm_vec;

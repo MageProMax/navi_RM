@@ -167,9 +167,14 @@ void LidarProcessor::process(SyncPackage &package)
     {
         pcl::copyPointCloud(*package.cloud, *m_cloud_down_lidar);
     }
+    const auto size=m_cloud_down_lidar->size();
+    m_cloud_down_world->resize(size);m_norm_vec->resize(size);
+    m_effect_cloud_lidar->resize(size);m_effect_norm_vec->resize(size);
+    m_nearest_points.resize(size);m_point_selected_flag.resize(size);
     trimCloudMap();
-    m_kf->update();
-    incrCloudMap();
+    m_measurement_updated=m_kf->update();
+    // Do not reinforce a scan that could not be registered.
+    if(m_measurement_updated)incrCloudMap();
 }
 
 void LidarProcessor::updateLossFunc(State &state, SharedState &share_data)
@@ -225,10 +230,11 @@ void LidarProcessor::updateLossFunc(State &state, SharedState &share_data)
         m_effect_norm_vec->points[effect_feat_num] = m_norm_vec->points[i];
         effect_feat_num++;
     }
-    if (effect_feat_num < 1)
+    m_effective_points=effect_feat_num;
+    m_translation_ratio=0.;
+    if (effect_feat_num < 20)
     {
         share_data.valid = false;
-        std::cerr << "NO Effective Points!" << std::endl;
         return;
     }
     share_data.valid = true;
@@ -255,6 +261,9 @@ void LidarProcessor::updateLossFunc(State &state, SharedState &share_data)
         share_data.H += J.transpose() * m_config.lidar_cov_inv * J;
         share_data.b += J.transpose() * m_config.lidar_cov_inv * norm_p.intensity;
     }
+    Eigen::SelfAdjointEigenSolver<M3D> eigen(share_data.H.block<3,3>(3,3));
+    if(eigen.info()==Eigen::Success && eigen.eigenvalues().maxCoeff()>0.)
+        m_translation_ratio=std::max(0.,eigen.eigenvalues().minCoeff()/eigen.eigenvalues().maxCoeff());
 }
 
 CloudType::Ptr LidarProcessor::transformCloud(CloudType::Ptr inp, const M3D &r, const V3D &t)

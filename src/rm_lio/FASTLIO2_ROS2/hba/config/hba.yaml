@@ -1,4 +1,7 @@
 scan_resolution: 0.1
+# This navigation project exports leveled clouds and planar PGO poses.
+# Optimize yaw/x/y without tilting the ground into 2-D obstacle layers.
+planar: true
 
 window_size: 20
 stride: 10

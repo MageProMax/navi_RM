@@ -54,6 +54,10 @@ install(DIRECTORY config DESTINATION share/${PROJECT_NAME})
 install(DIRECTORY rviz DESTINATION share/${PROJECT_NAME})
 
 if(BUILD_TESTING)
+  enable_testing()
+  add_executable(hba_information_test test/graph_information_test.cpp)
+  target_include_directories(hba_information_test PRIVATE src)
+  add_test(NAME hba_information_test COMMAND hba_information_test)
   find_package(ament_lint_auto REQUIRED)
   # the following line skips the linter which checks for copyrights
   # comment the line when a copyright and license is added to all source files
