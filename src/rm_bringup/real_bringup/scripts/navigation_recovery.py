@@ -164,7 +164,7 @@ class Recovery:
             return self.tick(now,enabled,goal,pose,grid,points,path_valid)
         if overlap:return Decision('confirming_overlap',override=True)
         if now-self.bad_since>=cfg.no_path_timeout:
-            if any(math.hypot(x,y)<cfg.radius for x,y in points):return Decision('rotation_blocked',override=True,reason='Live obstacle inside swept radius')
+            if any(math.hypot(x,y)<cfg.radius for x,y in points):return Decision('rotation_blocked',override=not path_valid,reason='Live obstacle inside swept radius; keep following a valid path')
             self.attempts+=1;self.started=now;self.last_yaw=pose[2];self.angle=0.;self.state='spin'
             return Decision('spin',True,True,wz=cfg.spin_speed,reason='No progress despite path' if path_valid else 'No valid path')
         return Decision('monitoring')

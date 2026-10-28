@@ -122,29 +122,23 @@ def generate_launch_description():
     )
 
     pointcloud_to_laserscan = launch_ros.actions.Node(
-        package='pointcloud_to_laserscan',
-        executable='pointcloud_to_laserscan_node',
+        package='real_bringup',
+        executable='accumulated_scan.py',
         name='pointcloud_to_laserscan',
         condition=prior,
         output='screen',
         parameters=[{
-            'target_frame': 'base_link',
-            'transform_tolerance': 0.5,
+            # A single current cloud, with body-volume filtering before projection.
+            'history_seconds': 0.0,
+            'publish_period': 0.1,
+            'minimum_valid_bins': 1,
             'min_height': 0.10,
             'max_height': 0.5,
-            'angle_min': -3.14159,
-            'angle_max': 3.14159,
             'angle_increment': 0.0087,
-            'scan_time': 0.1,
-            'range_min': 0.3,
-            'range_max': 10.0,
-            'use_inf': False,
-            'inf_epsilon': 1.0,
             'use_sim_time': use_sim_time,
         }],
         remappings=[
-            ('/cloud_in', '/fastlio2/body_cloud'),
-            ('/scan', '/scan'),
+            ('scan', '/scan'),
         ],
     )
 

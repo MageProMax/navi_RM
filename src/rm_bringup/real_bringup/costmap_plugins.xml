@@ -1,0 +1,5 @@
+<library path="footprint_update_layer">
+  <class type="real_bringup::FootprintUpdateLayer" base_class_type="nav2_costmap_2d::Layer">
+    <description>Apply queued footprint changes on the costmap update thread under its mutex.</description>
+  </class>
+</library>

@@ -146,10 +146,10 @@ private:
     }
     void sendCommand(const geometry_msgs::msg::Twist &effective) {
         command_pub_->publish(effective); // Intended ROS-frame command, not feedback.
-        // Preserve the existing MCU axis convention and 0x120 wire format.
+        // Measured chassis convention: first field forward, second right, positive yaw left.
         const std::array<int16_t, 4> values{{
-            static_cast<int16_t>(std::lround(-effective.linear.y * 500)),
             static_cast<int16_t>(std::lround(effective.linear.x * 500)),
+            static_cast<int16_t>(std::lround(-effective.linear.y * 500)),
             static_cast<int16_t>(std::lround(effective.angular.z * 500)), 100}};
         std::array<uint8_t, 8> bytes{};
         for (std::size_t i = 0; i < values.size(); ++i) {

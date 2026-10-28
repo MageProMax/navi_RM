@@ -16,6 +16,8 @@
   <depend>std_srvs</depend>
   <depend>bondcpp</depend>
   <depend>diagnostic_updater</depend>
+  <depend>nav2_costmap_2d</depend>
+  <depend>pluginlib</depend>
   <exec_depend>nav2_amcl</exec_depend>
   <exec_depend>nav2_bringup</exec_depend>
   <exec_depend>nav2_common</exec_depend>

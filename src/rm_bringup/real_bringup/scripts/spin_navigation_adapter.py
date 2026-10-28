@@ -10,11 +10,12 @@ import rclpy
 from rclpy.node import Node
 from rclpy.executors import ExternalShutdownException
 from rclpy.qos import qos_profile_sensor_data, QoSProfile, DurabilityPolicy, ReliabilityPolicy
-from geometry_msgs.msg import Twist, TransformStamped
+from geometry_msgs.msg import Twist, TransformStamped, Polygon, Point32
 from nav_msgs.msg import Odometry, Path
 from nav2_msgs.msg import Costmap
 from rm_interfaces.msg import NavigationStatus
 from navigation_recovery import Recovery, RecoveryConfig, Grid, Decision
+from robot_geometry import RobotGeometry
 from std_msgs.msg import Bool, Float64, String
 from sensor_msgs.msg import LaserScan
 from tf2_ros import TransformBroadcaster, Buffer, TransformListener
@@ -25,6 +26,12 @@ class SpinNavigationAdapter(Node):
     def __init__(self):
         super().__init__('spin_navigation_adapter')
         self.sim_time = bool(self.get_parameter('use_sim_time').value)
+        self.close_wall_mode=bool(self.declare_parameter('close_wall_mode',False).value)
+        self.geometry=RobotGeometry()
+        self.footprint_state=None;self.footprint_time=-math.inf
+        if self.close_wall_mode:
+            self.footprint_pubs=[self.create_publisher(Polygon,topic,1) for topic in
+                                 ('/local_costmap/footprint_request','/global_costmap/footprint_request')]
         self.require_mapping_ready=bool(self.declare_parameter('require_mapping_ready',False).value)
         self.mapping_ready=False;self.mapping_ready_since=math.inf
         if self.require_mapping_ready:
@@ -50,7 +57,7 @@ class SpinNavigationAdapter(Node):
         self.scan_points = []
         self.exploration_yaw=0.;self.exploration_yaw_receipt=-math.inf;self.hit_spinning=False
         self.scan_stamp = -math.inf
-        if self.scan_guard or self.recovery_enabled:
+        if self.scan_guard or self.recovery_enabled or self.close_wall_mode:
             self.create_subscription(LaserScan, '/scan', self.scan_cb, qos_profile_sensor_data)
             self.create_subscription(Float64,'/navigation/exploration_yaw_rate',self.exploration_yaw_cb,1)
             self.create_subscription(Bool,'/spin_active',lambda m:setattr(self,'hit_spinning',m.data),1)
@@ -258,6 +265,26 @@ class SpinNavigationAdapter(Node):
         self.cmd_pub.publish(Twist())
         self.permission_pub.publish(Bool(data=False))
 
+    def physical_spin(self, angular_command):
+        return self.hit_spinning or abs(self.yaw_rate)>.05 or abs(angular_command)>1e-6
+
+    def publish_footprint(self, now, odom_valid, angular_command):
+        if not self.close_wall_mode or not odom_valid:
+            return
+        spinning=self.physical_spin(angular_command)
+        state=(spinning,self.yaw)
+        if self.footprint_state is not None:
+            old_spin,old_yaw=self.footprint_state
+            delta=abs(math.atan2(math.sin(self.yaw-old_yaw),math.cos(self.yaw-old_yaw)))
+            if old_spin==spinning and (spinning or delta<.005) and 0<=now-self.footprint_time<1.:
+                return
+        polygon=Polygon()
+        polygon.points=[Point32(x=float(x),y=float(y),z=0.) for x,y in
+                        self.geometry.footprint(self.yaw,spinning)]
+        for publisher in self.footprint_pubs:
+            publisher.publish(polygon)
+        self.footprint_state=state;self.footprint_time=now
+
     def tick(self):
         now = self.elapsed_clock()
         stamp_age = self.get_clock().now().nanoseconds*1e-9 - self.stamp_seconds
@@ -286,8 +313,9 @@ class SpinNavigationAdapter(Node):
             if self.scan_guard:
                 if not self.hit_spinning and 0<=now-self.exploration_yaw_receipt<1.5:
                     effective.angular.z=self.exploration_yaw
-                effective.linear.x,effective.linear.y=self.guarded_velocity(
-                    effective.linear.x,effective.linear.y,self.scan_points)
+                if not self.close_wall_mode:
+                    effective.linear.x,effective.linear.y=self.guarded_velocity(
+                        effective.linear.x,effective.linear.y,self.scan_points)
                 # Preserve hit-spin whenever its swept footprint is clear.
                 if any(math.hypot(x,y)<.45 for x,y in self.scan_points):
                     # CAN permission inhibits hit-spin. Keep the separately
@@ -299,9 +327,30 @@ class SpinNavigationAdapter(Node):
             if recovery.active and not self.stopped and odom_valid and (not self.require_mapping_ready or (self.mapping_ready and now-self.mapping_ready_since>=1.)):
                 scan_age=self.get_clock().now().nanoseconds*1e-9-self.scan_stamp
                 if -.05<=scan_age<.5 and self.scan_points:
-                    effective.linear.x,effective.linear.y=self.guarded_velocity(recovery.vx,recovery.vy,self.scan_points,self.recovery.config.radius)
+                    if self.close_wall_mode:
+                        effective.linear.x,effective.linear.y=recovery.vx,recovery.vy
+                    else:
+                        effective.linear.x,effective.linear.y=self.guarded_velocity(recovery.vx,recovery.vy,self.scan_points,self.recovery.config.radius)
                     if recovery.state=='spin' and not any(math.hypot(x,y)<self.recovery.config.radius for x,y in self.scan_points):
                         effective.angular.z=recovery.wz;permitted=True
+        if self.close_wall_mode:
+            scan_age=self.get_clock().now().nanoseconds*1e-9-self.scan_stamp
+            spin_clear=self.geometry.spin_clear(self.scan_points,scan_age)
+            # A wall can forbid rotation while leaving translation along it valid.
+            # Do not feed this permission back into the translation-ready flag above.
+            if not spin_clear:
+                permitted=False
+                effective.angular.z=0.
+            if -.05<=scan_age<.5 and self.scan_points:
+                if self.physical_spin(effective.angular.z):
+                    effective.linear.x,effective.linear.y=self.guarded_velocity(
+                        effective.linear.x,effective.linear.y,self.scan_points,self.geometry.spin_radius)
+                else:
+                    effective.linear.x,effective.linear.y=self.geometry.guarded_velocity(
+                        effective.linear.x,effective.linear.y,self.scan_points)
+            else:
+                effective=Twist();permitted=False
+        self.publish_footprint(now,odom_valid,effective.angular.z)
         self.permission_pub.publish(Bool(data=permitted))
         self.cmd_pub.publish(effective)
 

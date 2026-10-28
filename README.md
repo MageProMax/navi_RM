@@ -45,7 +45,7 @@ Nav2：全局规划 + MPPI 全向局部控制
 | 先验导航障碍切片 | `base_link` 下 z=0.10～0.50 m |
 | 探索建图／避障切片 | z=0.10～1.50 m；建图累积 1.0 s，避障累积 0.6 s |
 | 探索全局规划器 | `SmacPlanner2D`，禁止直接穿越未知栅格 |
-| 自旋碰撞包络 | `robot_radius=0.43 m`，`footprint_padding=0.02 m` |
+| 实机碰撞外形 | 平移按 0.633×0.526 m 矩形、每侧余量 0.02 m；旋转按 0.47 m 扫掠半径，近墙暂停自旋，见 [贴墙通行](docs/close_wall_navigation_20261022.md) |
 | 局部膨胀衰减 | `cost_scaling_factor=30.0`，`inflation_radius=0.5 m` |
 
 三维定位模式的 TF 分工：

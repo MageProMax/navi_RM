@@ -142,7 +142,7 @@ controller_server:
       yaw_goal_tolerance_angular_vel: 0.0
     # MPPI predicts translation in nav_base_link (fixed odom heading).
     # The adapter rotates velocities into the spinning physical base frame.
-    # Physical spin is independent; circular costmaps cover its swept footprint.
+    # The adapter publishes the oriented body footprint, or a swept disk while spinning.
     FollowPath:
       plugin: "nav2_mppi_controller::MPPIController"
       time_steps: 40
@@ -179,7 +179,7 @@ controller_server:
         cost_power: 1
         cost_weight: 4.0
         critical_cost: 300.0
-        consider_footprint: false  # Circular robot_radius collision mode.
+        consider_footprint: true
         collision_cost: 1000000.0
         near_goal_distance: 0.8
       GoalCritic:
@@ -216,14 +216,18 @@ local_costmap:
       width: 8
       height: 8
       resolution: 0.05
-      robot_radius: 0.43  # Covers the rectangle at every yaw during spin.
-      footprint_padding: 0.02
+      # Physical 0.633 x 0.526 m body plus 0.02 m per side. The adapter
+      # rotates this polygon into nav_base_link and expands it during spin.
+      footprint: "[[-0.3365,-0.283],[0.3365,-0.283],[0.3365,0.283],[-0.3365,0.283]]"
+      footprint_padding: 0.0  # Already included in the polygon.
 
-      plugins: ["obstacle_layer", "inflation_layer"]
+      plugins: ["footprint_update", "obstacle_layer", "inflation_layer"]
+      footprint_update:
+        plugin: "real_bringup::FootprintUpdateLayer"
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
-        cost_scaling_factor: 30.0  # Rapid decay outside the spin-safe collision envelope.
-        inflation_radius: 0.5    # Keep inflation at least as large as the collision radius.
+        cost_scaling_factor: 30.0
+        inflation_radius: 0.5  # Covers both rectangle and the temporary spin disk.
       obstacle_layer:
         plugin: "nav2_costmap_2d::ObstacleLayer"
         enabled: True
@@ -255,11 +259,13 @@ global_costmap:
       global_frame: map
       robot_base_frame: nav_base_link
       use_sim_time: False
-      robot_radius: 0.43  # Covers the rectangle at every yaw during spin.
-      footprint_padding: 0.02
+      footprint: "[[-0.3365,-0.283],[0.3365,-0.283],[0.3365,0.283],[-0.3365,0.283]]"
+      footprint_padding: 0.0
       resolution: 0.05
       track_unknown_space: true
-      plugins: ["static_layer", "obstacle_layer", "inflation_layer"]
+      plugins: ["footprint_update", "static_layer", "obstacle_layer", "inflation_layer"]
+      footprint_update:
+        plugin: "real_bringup::FootprintUpdateLayer"
       obstacle_layer:
         plugin: "nav2_costmap_2d::ObstacleLayer"
         enabled: True
@@ -286,7 +292,7 @@ global_costmap:
         map_subscribe_transient_local: True
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
-        cost_scaling_factor: 2.5
+        cost_scaling_factor: 30.0
         inflation_radius: 0.5
       always_send_full_costmap: True
 
@@ -383,6 +389,7 @@ velocity_smoother:
 
 spin_navigation_adapter:
   ros__parameters:
+    close_wall_mode: true
     recovery.enabled: true
     recovery.no_path_timeout: 8.0
     recovery.overlap_timeout: 1.0
