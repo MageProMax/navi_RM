@@ -128,10 +128,12 @@ def generate_launch_description():
         condition=prior,
         output='screen',
         parameters=[{
-            # A single current cloud, with body-volume filtering before projection.
+            # Filter body returns and fit the floor before slicing relative height.
+            'ground_filter_enabled': True,
             'history_seconds': 0.0,
             'publish_period': 0.1,
             'minimum_valid_bins': 1,
+            'clearing_enabled': True,
             'min_height': 0.10,
             'max_height': 0.5,
             'angle_increment': 0.0087,
@@ -146,13 +148,16 @@ def generate_launch_description():
         package='real_bringup', executable='accumulated_scan.py',
         name='pointcloud_to_mapping_scan', output='screen', condition=explore,
         parameters=[{'history_seconds':1.0, 'publish_period':.5,
+            'ground_filter_enabled':True,
             'min_height':.10, 'max_height':1.5, 'use_sim_time':use_sim_time}],
         remappings=[('scan','/scan_mapping')])
 
     exploration_obstacle_scan = launch_ros.actions.Node(
         package='real_bringup', executable='accumulated_scan.py',
         name='exploration_obstacle_scan', output='screen', condition=explore,
-        parameters=[{'history_seconds':.6, 'publish_period':.1,
+        parameters=[{'history_seconds':0.0, 'publish_period':.1,
+            'minimum_valid_bins':1, 'clearing_enabled':True,
+            'ground_filter_enabled':True,
             'min_height':.10, 'max_height':1.5, 'use_sim_time':use_sim_time}],
         remappings=[('scan','/scan')])
 

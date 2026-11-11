@@ -45,6 +45,7 @@ struct Config
     double nbg = 0.0001;
     int imu_init_num = 20;
     double imu_init_duration = 5.0;
+    double imu_init_max_gap = 0.05;
     double imu_init_max_gyro = 0.05;
     double imu_init_max_gyro_std = 0.02;
     double imu_init_max_acc_std = 0.05;

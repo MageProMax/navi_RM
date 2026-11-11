@@ -231,7 +231,7 @@ local_costmap:
       obstacle_layer:
         plugin: "nav2_costmap_2d::ObstacleLayer"
         enabled: True
-        observation_sources: scan
+        observation_sources: scan clearing_cloud
         scan:
           topic: /scan
           # /scan endpoints are in base_link; ray origins are at the physical lidar.
@@ -241,10 +241,25 @@ local_costmap:
           clearing: True
           marking: True
           data_type: "LaserScan"
-          raytrace_max_range: 8.0
+          observation_persistence: 0.0
+          raytrace_max_range: 10.0
           raytrace_min_range: 0.0
           obstacle_max_range: 10.0  # Preserve real hits throughout the clearing range.
           obstacle_min_range: 0.0
+        clearing_cloud:
+          topic: /clearing_cloud
+          sensor_frame: mid360
+          data_type: "PointCloud2"
+          marking: False
+          clearing: True
+          observation_persistence: 0.0
+          expected_update_rate: 0.3
+          min_obstacle_height: -0.5
+          max_obstacle_height: 2.0
+          raytrace_min_range: 0.0
+          raytrace_max_range: 10.0
+          obstacle_min_range: 0.0
+          obstacle_max_range: 10.0
       static_layer:
         plugin: "nav2_costmap_2d::StaticLayer"
         map_subscribe_transient_local: True
@@ -274,7 +289,7 @@ global_costmap:
         combination_method: 0
         # Only measured rays may remove prior obstacles, not the robot footprint.
         footprint_clearing_enabled: False
-        observation_sources: scan
+        observation_sources: scan clearing_cloud
         scan:
           topic: /scan
           sensor_frame: mid360
@@ -283,10 +298,25 @@ global_costmap:
           clearing: True
           marking: True
           data_type: "LaserScan"
-          raytrace_max_range: 8.0
+          observation_persistence: 0.0
+          raytrace_max_range: 10.0
           raytrace_min_range: 0.0
           obstacle_max_range: 10.0
           obstacle_min_range: 0.0
+        clearing_cloud:
+          topic: /clearing_cloud
+          sensor_frame: mid360
+          data_type: "PointCloud2"
+          marking: False
+          clearing: True
+          observation_persistence: 0.0
+          expected_update_rate: 0.3
+          min_obstacle_height: -0.5
+          max_obstacle_height: 2.0
+          raytrace_min_range: 0.0
+          raytrace_max_range: 10.0
+          obstacle_min_range: 0.0
+          obstacle_max_range: 10.0
       static_layer:
         plugin: "nav2_costmap_2d::StaticLayer"
         map_subscribe_transient_local: True

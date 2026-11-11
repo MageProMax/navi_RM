@@ -32,6 +32,17 @@ install(TARGETS lifecycle_manager_resilient DESTINATION lib/${PROJECT_NAME})
 
 if(BUILD_TESTING)
   enable_testing()
+  find_package(Python3 REQUIRED COMPONENTS Interpreter)
+  add_test(NAME ground_filter_test
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test/ground_filter_test.py)
+  add_test(NAME ground_scan_test
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test/ground_scan_test.py)
+  set_tests_properties(ground_scan_test PROPERTIES ENVIRONMENT
+    "ROS_DOMAIN_ID=196;ROS_LOCALHOST_ONLY=1;ROS_LOG_DIR=/tmp/nav_ground_scan_test_logs")
+  add_test(NAME clearing_scan_test
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test/clearing_scan_test.py)
+  set_tests_properties(clearing_scan_test PROPERTIES ENVIRONMENT
+    "ROS_DOMAIN_ID=198;ROS_LOCALHOST_ONLY=1;ROS_LOG_DIR=/tmp/nav_clearing_scan_test_logs")
   add_executable(footprint_update_test test/footprint_update_test.cpp)
   target_link_libraries(footprint_update_test footprint_update_layer)
   ament_target_dependencies(footprint_update_test nav2_costmap_2d)
@@ -51,6 +62,6 @@ endif()
 install(DIRECTORY behavior_trees config launch rviz
 DESTINATION share/${PROJECT_NAME})
 
-install(PROGRAMS scripts/robot_geometry.py scripts/navigation_recovery.py scripts/accumulated_scan.py scripts/spin_navigation_adapter.py scripts/sim_can_bridge.py scripts/frontier_explorer.py scripts/frontier_planner.py DESTINATION lib/${PROJECT_NAME})
+install(PROGRAMS scripts/robot_geometry.py scripts/ground_filter.py scripts/navigation_recovery.py scripts/accumulated_scan.py scripts/spin_navigation_adapter.py scripts/sim_can_bridge.py scripts/frontier_explorer.py scripts/frontier_planner.py DESTINATION lib/${PROJECT_NAME})
 
 ament_package()

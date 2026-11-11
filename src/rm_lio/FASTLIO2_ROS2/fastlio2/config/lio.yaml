@@ -34,6 +34,8 @@ nbg: 0.0001
 # a minimum-sample sanity check; duration and motion checks decide readiness.
 imu_init_num: 200
 imu_init_duration: 5.0
+# Missing/invalid samples restart the continuous stationary window.
+imu_init_max_gap: 0.05
 imu_init_max_gyro: 0.05
 imu_init_max_gyro_std: 0.02
 # Dimensionless standard deviation divided by the measured gravity magnitude.

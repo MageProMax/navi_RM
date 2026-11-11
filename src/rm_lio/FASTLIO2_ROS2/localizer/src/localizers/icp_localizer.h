@@ -31,11 +31,14 @@ public:
     
     bool loadMap(const std::string &path);
     
-    void setInput(const CloudType::Ptr &cloud);
+    void setInput(const CloudType::Ptr &cloud, const M4F &map_body_guess = M4F::Identity());
 
     bool align(M4F &guess);
     double inlierRatio() const { return m_inlier_ratio; }
     double fitness() const { return m_fitness; }
+    bool heightFilterEnabled() const { return m_height_filter_enabled; }
+    std::size_t selectedInputPoints() const { return m_selected_input_points; }
+    CloudType::ConstPtr registrationCloud() const { return m_refine_inp; }
     ICPConfig &config() { return m_config; }
     CloudType::Ptr roughMap() { return m_rough_tgt; }
     CloudType::Ptr refineMap() { return m_refine_tgt; }
@@ -54,4 +57,8 @@ private:
     CloudType::Ptr m_refine_tgt;
     CloudType::Ptr m_rough_tgt;
     std::string m_pcd_path;
+    bool m_height_filter_enabled = false;
+    V3D m_ground_plane = V3D::Zero();
+    double m_minimum_height = 0.0, m_maximum_height = 0.0;
+    std::size_t m_selected_input_points = 0;
 };

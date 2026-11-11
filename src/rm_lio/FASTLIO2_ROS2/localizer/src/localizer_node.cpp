@@ -61,6 +61,7 @@ struct NodeState
     rclcpp::Time last_send_tf_time = rclcpp::Time(0, 0, RCL_ROS_TIME);
     builtin_interfaces::msg::Time last_message_time;
     ScanHistory history;
+    std::string body_frame;
     M3D last_r;                          // localmap_body_r
     V3D last_t;                          // localmap_body_t
     M3D last_offset_r = M3D::Identity(); // map_localmap_r
@@ -104,6 +105,7 @@ public:
                     m_localizer_config.registration_method.c_str(), m_config.accumulation_seconds,
                     m_config.accumulation_max_frames);
         m_map_cloud_pub = this->create_publisher<sensor_msgs::msg::PointCloud2>("map_cloud", 10);
+        m_registration_cloud_pub = this->create_publisher<sensor_msgs::msg::PointCloud2>("registration_cloud", 1);
 
         // 创建一个互斥的回调组专属给 Timer 使用
         m_timer_cb_group = this->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
@@ -265,6 +267,7 @@ public:
         M3D current_local_r;
         V3D current_local_t;
         ScanHistory history;
+        std::string body_frame;
         builtin_interfaces::msg::Time current_time;
         {
             std::lock_guard<std::mutex> lock(m_state.message_mutex);
@@ -274,6 +277,7 @@ public:
             current_local_t = m_state.last_t;
             current_time = m_state.last_message_time;
             history = m_state.history;
+            body_frame = m_state.body_frame;
         }
         const auto now = this->get_clock()->now();
         const double scan_age = (now - rclcpp::Time(current_time)).seconds();
@@ -312,7 +316,13 @@ public:
         bool result = false;
         {
             std::lock_guard<std::mutex> lock(m_localizer_mutex);
-            m_localizer->setInput(current_cloud);
+            m_localizer->setInput(current_cloud, initial_guess);
+            if (m_registration_cloud_pub->get_subscription_count()>0) {
+                sensor_msgs::msg::PointCloud2 cloud_msg;
+                pcl::toROSMsg(*m_localizer->registrationCloud(),cloud_msg);
+                cloud_msg.header.frame_id=body_frame;cloud_msg.header.stamp=current_time;
+                m_registration_cloud_pub->publish(cloud_msg);
+            }
             result = m_localizer->align(initial_guess);
         }
         if (result)
@@ -351,7 +361,10 @@ public:
         {
             RCLCPP_WARN_THROTTLE(
                 this->get_logger(), *this->get_clock(), 2000,
-                "3D relocalization has not converged; check initial_pose and map pairing");
+                "3D relocalization has not converged: registration points=%zu/%zu, "
+                "inlier=%.3f fitness=%.4f; check initial_pose and map pairing",
+                m_localizer->selectedInputPoints(),current_cloud->size(),
+                m_localizer->inlierRatio(),m_localizer->fitness());
         }
         else
         {
@@ -366,6 +379,8 @@ public:
              << "\",\"accepted\":" << (result ? "true" : "false")
              << ",\"frames\":" << history.scans.size()
              << ",\"points\":" << current_cloud->size()
+             << ",\"registration_points\":" << m_localizer->selectedInputPoints()
+             << ",\"height_filter\":" << (m_localizer->heightFilterEnabled()?"true":"false")
              << ",\"inlier_ratio\":" << m_localizer->inlierRatio()
              << ",\"fitness_m2\":" << m_localizer->fitness()
              << ",\"duration_ms\":" << std::chrono::duration<double,std::milli>(
@@ -412,6 +427,7 @@ public:
         m_state.last_r = rotation.toRotationMatrix();
         m_state.last_t = translation;
         m_state.last_message_time = cloud_msg->header.stamp;
+        m_state.body_frame = odom_msg->child_frame_id;
         m_state.message_received = true;
     }
 
@@ -507,6 +523,10 @@ public:
                 RCLCPP_ERROR(this->get_logger(), "Failed to load PCD map: %s", pcd_path.c_str());
                 return false;
             }
+            if (m_localizer->heightFilterEnabled())
+                RCLCPP_INFO(get_logger(),
+                    "Map height-band metadata detected; registration scans use the same "
+                    "ground-relative band in the predicted map frame");
         }
 
         const Eigen::AngleAxisd roll_angle(
@@ -557,6 +577,7 @@ private:
     rclcpp::Service<interface::srv::Relocalize>::SharedPtr m_reloc_srv;
     rclcpp::Service<interface::srv::IsValid>::SharedPtr m_reloc_check_srv;
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr m_map_cloud_pub;
+    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr m_registration_cloud_pub;
     rclcpp::Publisher<std_msgs::msg::String>::SharedPtr m_metrics_pub;
 };
 int main(int argc, char **argv)

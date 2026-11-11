@@ -22,6 +22,17 @@ online_pgo:
     min_ground_height: -0.15
     min_obstacle_height: 0.10
     max_obstacle_height: 1.50
+    # Raster-only height above a supported local floor; raw PCD remains intact.
+    ground_filter:
+      enabled: true
+      radius: 4.0
+      max_slope_deg: 12.0
+      max_offset: 0.35
+      max_step: 0.08
+      distance_threshold: 0.035
+      minimum_points: 30
+      model_max_age: 1.0
+      model_max_travel: 0.5
     # Static-map cleaning only; raw /fastlio2/body_cloud and /scan stay untouched.
     static_filter:
       enabled: true

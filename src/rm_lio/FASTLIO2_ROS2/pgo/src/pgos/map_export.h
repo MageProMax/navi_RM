@@ -1,5 +1,6 @@
 #pragma once
 #include "static_map_filter.h"
+#include "occupancy_builder.h"
 #include <nav_msgs/msg/occupancy_grid.hpp>
 #include <pcl/common/transforms.h>
 #include <pcl/io/pcd_io.h>
@@ -7,6 +8,33 @@
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
+
+inline GridConfig readGridConfig(const std::filesystem::path &path) {
+    GridConfig c;auto n=YAML::LoadFile(path.string());
+    if(n["online_pgo"])n=YAML::Clone(n["online_pgo"]["ros__parameters"]);
+    if(n["resolution"])c.resolution=n["resolution"].as<double>();
+    if(n["min_ground_height"])c.ground_z=n["min_ground_height"].as<double>();
+    if(n["min_obstacle_height"])c.minimum_z=n["min_obstacle_height"].as<double>();
+    if(n["max_obstacle_height"])c.maximum_z=n["max_obstacle_height"].as<double>();
+    const auto g=n["ground_filter"];
+    if(g) {
+        if(g["enabled"])c.ground.enabled=g["enabled"].as<bool>();
+        if(g["radius"])c.ground.radius=g["radius"].as<double>();
+        if(g["max_slope_deg"])c.ground.max_slope_deg=g["max_slope_deg"].as<double>();
+        if(g["max_offset"])c.ground.max_offset=g["max_offset"].as<double>();
+        if(g["max_step"])c.ground.max_step=g["max_step"].as<double>();
+        if(g["distance_threshold"])c.ground.threshold=g["distance_threshold"].as<double>();
+        if(g["minimum_points"])c.ground.minimum_points=g["minimum_points"].as<int>();
+        if(g["model_max_age"])c.ground.max_age=g["model_max_age"].as<double>();
+        if(g["model_max_travel"])c.ground.max_travel=g["model_max_travel"].as<double>();
+    }
+    validateGroundPlane(c.ground);
+    if(!std::isfinite(c.resolution)||c.resolution<=0||!std::isfinite(c.ground_z)||
+       !std::isfinite(c.minimum_z)||!std::isfinite(c.maximum_z)||
+       c.ground_z>=c.minimum_z||c.minimum_z>=c.maximum_z)
+        throw std::invalid_argument("Invalid occupancy height/resolution");
+    return c;
+}
 
 inline YAML::Node filterConfigYaml(const StaticFilterConfig &c) {
     YAML::Node n;n["enabled"]=c.enabled;n["voxel_size"]=c.voxel_size;n["endpoint_margin"]=c.endpoint_margin;

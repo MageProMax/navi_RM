@@ -53,6 +53,16 @@ public:
         grid_config_.minimum_z=declare_parameter("min_obstacle_height",.1);
         grid_config_.maximum_z=declare_parameter("max_obstacle_height",1.5);
         grid_config_.ground_z=declare_parameter("min_ground_height",-.15);
+        grid_config_.ground.enabled=declare_parameter("ground_filter.enabled",true);
+        grid_config_.ground.radius=declare_parameter("ground_filter.radius",4.);
+        grid_config_.ground.max_slope_deg=declare_parameter("ground_filter.max_slope_deg",12.);
+        grid_config_.ground.max_offset=declare_parameter("ground_filter.max_offset",.35);
+        grid_config_.ground.max_step=declare_parameter("ground_filter.max_step",.08);
+        grid_config_.ground.threshold=declare_parameter("ground_filter.distance_threshold",.035);
+        grid_config_.ground.minimum_points=declare_parameter("ground_filter.minimum_points",30);
+        grid_config_.ground.max_age=declare_parameter("ground_filter.model_max_age",1.);
+        grid_config_.ground.max_travel=declare_parameter("ground_filter.model_max_travel",.5);
+        validateGroundPlane(grid_config_.ground);
         filter_config_.enabled=declare_parameter("static_filter.enabled",true);
         filter_config_.voxel_size=declare_parameter("static_filter.voxel_size",.10);
         filter_config_.endpoint_margin=declare_parameter("static_filter.endpoint_margin",.20);

@@ -146,10 +146,11 @@ private:
     }
     void sendCommand(const geometry_msgs::msg::Twist &effective) {
         command_pub_->publish(effective); // Intended ROS-frame command, not feedback.
-        // Measured chassis convention: first field forward, second right, positive yaw left.
+        // Direction correction (2026-11-10): first field positive right,
+        // second field positive forward. ROS x is forward and y is left.
         const std::array<int16_t, 4> values{{
-            static_cast<int16_t>(std::lround(effective.linear.x * 500)),
             static_cast<int16_t>(std::lround(-effective.linear.y * 500)),
+            static_cast<int16_t>(std::lround(effective.linear.x * 500)),
             static_cast<int16_t>(std::lround(effective.angular.z * 500)), 100}};
         std::array<uint8_t, 8> bytes{};
         for (std::size_t i = 0; i < values.size(); ++i) {

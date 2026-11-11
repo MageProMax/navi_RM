@@ -4,6 +4,8 @@
 #include <pcl/common/transforms.h>
 #include <pcl/common/point_tests.h>
 #include <pcl/kdtree/kdtree_flann.h>
+#include <yaml-cpp/yaml.h>
+#include <limits>
 
 ICPLocalizer::ICPLocalizer(const ICPConfig &config) : m_config(config)
 {
@@ -27,6 +29,31 @@ bool ICPLocalizer::loadMap(const std::string &path)
     {
         std::cerr << "Map file not found: " << path << std::endl;
         return false;
+    }
+    // filter_pcd_by_ground.py writes the exact map-frame height band beside
+    // map.pcd. Apply that same band to scans, rather than treating deliberately
+    // omitted floor/ceiling points as evidence of poor registration overlap.
+    bool height_filter_enabled = false;
+    V3D ground_plane = V3D::Zero();
+    double minimum_height = 0., maximum_height = std::numeric_limits<double>::infinity();
+    const auto metadata = std::filesystem::path(path).parent_path()/"height_filter_metadata.json";
+    if (std::filesystem::exists(metadata)) {
+        try {
+            const auto config = YAML::LoadFile(metadata.string());
+            const auto plane = config["plane"];
+            ground_plane = V3D(plane["a"].as<double>(), plane["b"].as<double>(), plane["c_m"].as<double>());
+            minimum_height = config["minimum_height_m"].as<double>();
+            const auto maximum = config["maximum_height_m"];
+            if (maximum && !maximum.IsNull())maximum_height = maximum.as<double>();
+            if (!ground_plane.allFinite() || !std::isfinite(minimum_height) ||
+                (maximum && !maximum.IsNull() && !std::isfinite(maximum_height)) ||
+                maximum_height < minimum_height)
+                throw std::invalid_argument("Invalid map height band");
+            height_filter_enabled = true;
+        } catch (const std::exception &error) {
+            std::cerr << "Invalid height-filter metadata " << metadata << ": " << error.what() << std::endl;
+            return false;
+        }
     }
     pcl::PCDReader reader;
     CloudType::Ptr cloud(new CloudType);
@@ -62,30 +89,54 @@ bool ICPLocalizer::loadMap(const std::string &path)
     m_refine_gicp.setInputTarget(m_refine_tgt);
     m_rough_icp.setInputTarget(m_rough_tgt);
     m_refine_icp.setInputTarget(m_refine_tgt);
+    m_height_filter_enabled = height_filter_enabled;
+    m_ground_plane = ground_plane;
+    m_minimum_height = minimum_height;
+    m_maximum_height = maximum_height;
     return true;
 }
-void ICPLocalizer::setInput(const CloudType::Ptr &cloud)
+void ICPLocalizer::setInput(const CloudType::Ptr &cloud, const M4F &map_body_guess)
 {
+    CloudType::Ptr selected = cloud;
+    if (m_height_filter_enabled) {
+        selected = std::make_shared<CloudType>();
+        if (map_body_guess.allFinite()) {
+            const M3D rotation = map_body_guess.block<3,3>(0,0).cast<double>();
+            const V3D translation = map_body_guess.block<3,1>(0,3).cast<double>();
+            for (const auto &point : *cloud) {
+                if (!pcl::isFinite(point))continue;
+                const V3D world = rotation*point.getVector3fMap().cast<double>()+translation;
+                const double height = world.z()-m_ground_plane.x()*world.x()-
+                    m_ground_plane.y()*world.y()-m_ground_plane.z();
+                if (height >= m_minimum_height && height <= m_maximum_height)
+                    selected->push_back(point);
+            }
+        }
+    }
+    m_selected_input_points = selected->size();
+    if (selected->empty()) {
+        m_refine_inp->clear();m_rough_inp->clear();return;
+    }
     if (m_config.refine_scan_resolution > 0)
     {
         m_voxel_filter.setLeafSize(m_config.refine_scan_resolution, m_config.refine_scan_resolution, m_config.refine_scan_resolution);
-        m_voxel_filter.setInputCloud(cloud);
+        m_voxel_filter.setInputCloud(selected);
         m_voxel_filter.filter(*m_refine_inp);
     }
     else
     {
-        pcl::copyPointCloud(*cloud, *m_refine_inp);
+        pcl::copyPointCloud(*selected, *m_refine_inp);
     }
 
     if (m_config.rough_scan_resolution > 0)
     {
         m_voxel_filter.setLeafSize(m_config.rough_scan_resolution, m_config.rough_scan_resolution, m_config.rough_scan_resolution);
-        m_voxel_filter.setInputCloud(cloud);
+        m_voxel_filter.setInputCloud(selected);
         m_voxel_filter.filter(*m_rough_inp);
     }
     else
     {
-        pcl::copyPointCloud(*cloud, *m_rough_inp);
+        pcl::copyPointCloud(*selected, *m_rough_inp);
     }
 }
 

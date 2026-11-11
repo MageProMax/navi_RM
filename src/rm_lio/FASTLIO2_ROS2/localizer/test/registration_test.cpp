@@ -6,6 +6,7 @@
 #include <stdexcept>
 #include <filesystem>
 #include <unistd.h>
+#include <fstream>
 
 void require(bool ok, const char *message) { if (!ok) throw std::runtime_error(message); }
 M4F pose(float x, float y, float yaw) {
@@ -63,6 +64,54 @@ int main() {
         auto empty=std::make_shared<CloudType>(); localizer.setInput(empty);
         require(!localizer.align(estimate),"empty scan accepted");
     }
+    // A deliberately cropped map must compare scans from that same height
+    // band, in map coordinates, even with a translated/tilted body frame.
+    const auto folder=std::filesystem::temp_directory_path()/ ("registration_band_"+std::to_string(getpid()));
+    std::filesystem::create_directories(folder);
+    const auto cropped_path=folder/"map.pcd";
+    auto band_scene=std::make_shared<CloudType>(*world);
+    // A table in the retained band constrains height; two vertical planes
+    // alone leave translation along Z underconstrained.
+    for(int i=0;i<35;++i)for(int j=0;j<25;++j) {
+        PointType p;p.x=.09*i;p.y=.085*j;p.z=.7;p.intensity=3;band_scene->push_back(p);
+    }
+    auto cropped=std::make_shared<CloudType>();auto with_ceiling=std::make_shared<CloudType>(*band_scene);
+    for(const auto &p:*band_scene) {
+        const double h=p.z-.03*p.x+.02*p.y-.01;
+        if(h>=.1&&h<=1.5)cropped->push_back(p);
+    }
+    for(int i=0;i<71;++i)for(int j=0;j<55;++j) {
+        PointType p;p.x=.04*i;p.y=.06*j;p.z=3.5;p.intensity=2;with_ceiling->push_back(p);
+    }
+    pcl::io::savePCDFileBinary(cropped_path.string(),*cropped);
+    const auto metadata=folder/"height_filter_metadata.json";
+    for(const auto method: {"icp","gicp"}) {
+        ICPConfig config;config.registration_method=method;
+        config.rough_max_iteration=50;config.refine_max_iteration=50;
+        ICPLocalizer band(config);
+        const auto truth=pose(.3,-.2,.08);
+        M4F body=truth;body(2,3)=.23;
+        body.block<3,3>(0,0)=truth.block<3,3>(0,0)*Eigen::AngleAxisf(.05,V3F::UnitX()).toRotationMatrix();
+        auto source=std::make_shared<CloudType>();pcl::transformPointCloud(*with_ceiling,*source,body.inverse());
+        require(band.loadMap(cropped_path.string()),"cropped map load failed");
+        auto estimate=body;band.setInput(source,estimate);
+        require(!band.heightFilterEnabled()&&band.selectedInputPoints()==source->size(),
+                "map without metadata unexpectedly filtered its scan");
+        {std::ofstream out(metadata);out<<R"({"plane":{"a":0.03,"b":-0.02,"c_m":0.01},"minimum_height_m":0.1,"maximum_height_m":1.5})";}
+        require(band.loadMap(cropped_path.string())&&band.heightFilterEnabled(),"height metadata not loaded");
+        estimate=body;band.setInput(source,estimate);
+        require(band.selectedInputPoints()>20&&band.selectedInputPoints()<source->size()/2,"height selection did not remove floor/ceiling");
+        require(band.align(estimate),"height-matched scan rejected");
+        require(band.inlierRatio()>.9,"cropped-map overlap unexpectedly low");
+        require((estimate.block<3,1>(0,3)-body.block<3,1>(0,3)).norm()<.04,"height filter changed recovered pose");
+        std::cout<<method<<" cropped-map overlap="<<band.inlierRatio()<<" selected="<<band.selectedInputPoints()<<"/"<<source->size()<<"\n";
+        {std::ofstream out(metadata);out<<R"({"plane":{"a":0,"b":0,"c_m":0},"minimum_height_m":1.5,"maximum_height_m":0.1})";}
+        require(!band.loadMap(cropped_path.string()),"inverted height bounds accepted");
+        std::filesystem::remove(metadata);
+        require(band.loadMap(path.string())&&!band.heightFilterEnabled(),"map change retained stale height filter");
+        band.setInput(source,body);require(band.selectedInputPoints()==source->size(),"uncropped map lost input points");
+    }
+    std::filesystem::remove_all(folder);
     std::filesystem::remove(path);
     std::cout<<"PASS motion compensation, history reset/bounds, ICP/GICP pose recovery, overlap rejection\n";
 }

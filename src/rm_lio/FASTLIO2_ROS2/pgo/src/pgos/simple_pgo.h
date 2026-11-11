@@ -18,7 +18,7 @@ struct KeyPoseWithCloud
     V3D t_local;
     M3D r_global;
     V3D t_global;
-    double time;
+    double time=0.;
     CloudType::Ptr body_cloud;
 };
 struct LoopPair

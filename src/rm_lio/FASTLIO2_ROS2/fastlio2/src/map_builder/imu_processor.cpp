@@ -3,9 +3,12 @@
 #include <cmath>
 #include <iomanip>
 #include <iostream>
+#include <stdexcept>
 
 IMUProcessor::IMUProcessor(Config &config, std::shared_ptr<IESKF> kf) : m_config(config), m_kf(kf)
 {
+    if(!std::isfinite(m_config.imu_init_max_gap)||m_config.imu_init_max_gap<=0.)
+        throw std::invalid_argument("imu_init_max_gap must be finite and positive");
     m_Q.setIdentity();
     m_Q.block<3, 3>(0, 0) = M3D::Identity() * m_config.ng;
     m_Q.block<3, 3>(3, 3) = M3D::Identity() * m_config.na;
@@ -19,7 +22,27 @@ IMUProcessor::IMUProcessor(Config &config, std::shared_ptr<IESKF> kf) : m_config
 
 bool IMUProcessor::initialize(SyncPackage &package)
 {
-    m_imu_cache.insert(m_imu_cache.end(), package.imus.begin(), package.imus.end());
+    bool restarted=false;
+    for(const auto &imu:package.imus) {
+        if(!std::isfinite(imu.time)||!imu.acc.allFinite()||!imu.gyro.allFinite()) {
+            m_imu_cache.clear();restarted=true;continue;
+        }
+        if(!m_imu_cache.empty()) {
+            const double gap=imu.time-m_imu_cache.back().time;
+            if(gap<=0.||gap>m_config.imu_init_max_gap) {
+                m_imu_cache.clear();restarted=true;
+            }
+        }
+        m_imu_cache.push_back(imu);
+    }
+    if(restarted&&!m_imu_cache.empty()) {
+        const double time=m_imu_cache.back().time;
+        if(m_last_init_warning_time<0.||time<m_last_init_warning_time||time-m_last_init_warning_time>=2.) {
+            std::cerr<<"IMU initialization window restarted: invalid/out-of-order sample or gap > "
+                     <<m_config.imu_init_max_gap<<" s"<<std::endl;
+            m_last_init_warning_time=time;
+        }
+    }
     if (m_imu_cache.size() < 2)
         return false;
 

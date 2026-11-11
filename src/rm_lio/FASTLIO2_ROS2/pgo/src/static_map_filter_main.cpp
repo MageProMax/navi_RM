@@ -12,6 +12,11 @@ int main(int argc,char **argv) {
         StaticFilterConfig config;
         if(args.count("--config"))config=readFilterConfig(args.at("--config"));
         else if(std::filesystem::exists(source/"dynamic_filter.yaml"))config=readFilterConfig(source/"dynamic_filter.yaml");
+        GridConfig grid_config;
+        if(args.count("--grid-config"))grid_config=readGridConfig(args.at("--grid-config"));
+        const bool export_map=args.count("--export-map")&&args.at("--export-map")=="true";
+        if(args.count("--export-map")&&args.at("--export-map")!="true"&&args.at("--export-map")!="false")
+            throw std::runtime_error("--export-map must be true or false");
         std::ifstream poses(source/"poses.txt"),times(source/"frame_times.txt"),override;
         if(!poses)throw std::runtime_error("Cannot read poses.txt");
         if(args.count("--poses")){override.open(args.at("--poses"));if(!override)throw std::runtime_error("Cannot read pose override");}
@@ -38,8 +43,21 @@ int main(int argc,char **argv) {
         double extra;if(override.is_open() && override>>extra)throw std::runtime_error("Extra refined pose rows");
         if(times.is_open() && times>>extra)throw std::runtime_error("Extra timestamps");
         if(frames.empty())throw std::runtime_error("No observations");
+        if(export_map) {
+            // Use the same planar optimized poses as the live map and PCD export.
+            for(auto &f:frames) {
+                const double yaw=std::atan2(f.r_global(1,0),f.r_global(0,0));
+                f.r_global=Eigen::AngleAxisd(yaw,V3D::UnitZ()).toRotationMatrix();f.t_global.z()=0.;
+            }
+        }
         auto filtered=filterStaticMap(frames,config);
-        std::filesystem::create_directories(output);writePatches(output,filtered.frames);
+        std::filesystem::create_directories(output);
+        if(export_map) {
+            const auto grid=buildOccupancy(filtered.frames,grid_config);
+            writePairedMap(output,filtered,grid,config);
+            if(args.count("--grid-config"))writeYaml(output/"grid_config.yaml",YAML::LoadFile(args.at("--grid-config")));
+        }
+        writePatches(output,filtered.frames);
         writeFilterMetadata(output,config,filtered.stats);
         std::cout<<"Static-map filter: "<<filtered.stats.state<<", removed "<<filtered.stats.removed_points<<" / "<<filtered.stats.input_points<<" points\n";
         return 0;

@@ -132,6 +132,8 @@ public:
 
         m_builder_config.imu_init_num = config["imu_init_num"].as<int>();
         m_builder_config.imu_init_duration = config["imu_init_duration"].as<double>();
+        if(config["imu_init_max_gap"])
+            m_builder_config.imu_init_max_gap=config["imu_init_max_gap"].as<double>();
         m_builder_config.imu_init_max_gyro = config["imu_init_max_gyro"].as<double>();
         m_builder_config.imu_init_max_gyro_std = config["imu_init_max_gyro_std"].as<double>();
         m_builder_config.imu_init_max_acc_std = config["imu_init_max_acc_std"].as<double>();

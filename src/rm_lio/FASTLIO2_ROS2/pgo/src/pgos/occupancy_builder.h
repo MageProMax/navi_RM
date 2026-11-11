@@ -1,5 +1,6 @@
 #pragma once
 #include "simple_pgo.h"
+#include "ground_plane.h"
 #include <nav_msgs/msg/occupancy_grid.hpp>
 #include <unordered_set>
 #include <limits>
@@ -8,24 +9,30 @@
 struct GridConfig {
     double resolution=.05, minimum_z=.1, maximum_z=1.5, ground_z=-.15, range=10.;
     std::size_t maximum_cells=4000000;
+    GroundPlaneConfig ground;
 };
 
 // Rebuild from immutable body-frame observations and FINAL optimized poses.
 // No historical raster survives an optimization; obstacles dominate clearing.
 inline nav_msgs::msg::OccupancyGrid buildOccupancy(const std::vector<KeyPoseWithCloud> &frames,
                                                   const GridConfig &cfg) {
-    struct Observation { V3D origin,base; std::vector<V3D> points; };
+    struct Return { V3D point; double height; };
+    struct Observation { V3D origin,base; std::vector<Return> points; };
     std::vector<Observation> observations;
+    GroundPlaneTracker ground(cfg.ground);
     double minx=std::numeric_limits<double>::infinity(), miny=minx, maxx=-minx,maxy=-minx;
     auto bound=[&](const V3D &p){minx=std::min(minx,p.x());miny=std::min(miny,p.y());maxx=std::max(maxx,p.x());maxy=std::max(maxy,p.y());};
     for (const auto &f:frames) {
         Observation obs;obs.origin=f.r_global*V3D(0,.22157,.33018)+f.t_global;obs.base=f.t_global;
         bound(obs.origin);bound(obs.base);
+        const auto plane=ground.update(*f.body_cloud,f.r_global,f.t_global,f.time);
         for(const auto &p:*f.body_cloud) {
-            V3D point=f.r_global*p.getVector3fMap().cast<double>()+f.t_global;
-            if (!point.allFinite() || point.z()<cfg.ground_z || point.z()>cfg.maximum_z ||
+            const V3D local=p.getVector3fMap().cast<double>();
+            V3D point=f.r_global*local+f.t_global;
+            const double height=plane?local.z()-plane->x()*local.x()-plane->y()*local.y()-plane->z():point.z();
+            if (!point.allFinite() || height<cfg.ground_z || height>cfg.maximum_z ||
                 (point-obs.origin).head<2>().norm()>cfg.range) continue;
-            obs.points.push_back(point);bound(point);
+            obs.points.push_back({point,height});bound(point);
         }
         observations.push_back(std::move(obs));
     }
@@ -44,8 +51,8 @@ inline nav_msgs::msg::OccupancyGrid buildOccupancy(const std::vector<KeyPoseWith
         const auto start=cell(obs.origin);const auto base=cell(obs.base);clear(base.first,base.second);
         std::unordered_set<int> ends;
         for(const auto &p:obs.points) {
-            const auto end=cell(p);const int idx=end.second*width+end.first;
-            if(p.z()>=cfg.minimum_z)occupied[idx]=true;
+            const auto end=cell(p.point);const int idx=end.second*width+end.first;
+            if(p.height>=cfg.minimum_z)occupied[idx]=true;
             ends.insert(idx);
         }
         for(const int idx:ends) {

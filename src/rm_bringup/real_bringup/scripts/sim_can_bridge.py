@@ -33,7 +33,7 @@ class SimCanBridge(Node):
             self.receipt = -float('inf')
             return
         command = Twist()
-        # Inverse of the hardware convention: MCU vx=-ROS vy, MCU vy=ROS vx.
+        # Hardware convention: first field positive right, second positive forward.
         command.linear.x, command.linear.y = vy_mcu/500., -vx_mcu/500.
         command.angular.z = wz/500.
         self.command = command
