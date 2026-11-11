@@ -1,0 +1,9 @@
+enabled: true
+voxel_size: 0.10000000000000001
+endpoint_margin: 0.20000000000000001
+min_observation_interval: 0.5
+min_free_observations: 3
+free_to_hit_ratio: 3
+max_range: 10
+maximum_voxels: 2000000
+maximum_ray_steps: 60000000

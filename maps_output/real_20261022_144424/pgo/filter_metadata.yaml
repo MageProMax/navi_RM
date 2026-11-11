@@ -1,0 +1,6 @@
+state: ray_budget_retained_all
+input_points: 2462448
+removed_points: 0
+removed_voxels: 0
+candidate_voxels: 136942
+ray_steps: 60000001

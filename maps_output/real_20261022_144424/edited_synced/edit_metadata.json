@@ -1,0 +1,22 @@
+{
+  "source_dir": "/home/mage/navigation/nav_rm_final/maps_output/real_20261022_144424/pgo",
+  "edited_image": "/home/mage/navigation/nav_rm_final/maps_output/real_20261022_144424/edited/map_edit.pgm",
+  "source_pcd_sha256": "f48854c6c8c842f55444546a456dccf2badfab40ad64e82ea02269d8f601e89f",
+  "source_pgm_sha256": "d9043c4c6f92c7e28ffd596bcb72c2afb287478b15fef2e1f5ce0e3eac4d0ffc",
+  "edited_pgm_sha256": "27483dacdb74d6c6dc22d0d9b68f6eb0278a76476308d627c7f4acd34219f42b",
+  "output_pcd_sha256": "73b7153f65362c7aa1cc78bbce498e8bb4066bc8864a515b8b3f91d482579ef2",
+  "image_width": 790,
+  "image_height": 569,
+  "changed_pixels": 49913,
+  "erase_mask_pixels": 48525,
+  "input_points": 2462448,
+  "removed_points": 838069,
+  "retained_points": 1624379,
+  "z_min": null,
+  "z_max": null,
+  "height_selection": "all heights",
+  "mask_policy": "decreased occupancy probability, edited pixel no longer occupied; includes repainted free cells",
+  "retained_point_bytes_verified": true,
+  "remaining_selected_points": 0,
+  "raw_patches_modified": false
+}

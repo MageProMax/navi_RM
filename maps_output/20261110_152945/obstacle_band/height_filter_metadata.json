@@ -1,0 +1,22 @@
+{
+  "source_dir": "/home/mage/navigation/nav_rm_final/maps_output/20261110_152945/pgm_synced",
+  "source_pcd_sha256": "cda6ee7391cd538d89c2654ee457ea25c3181d1bc078797b5a54c55edf2ccd95",
+  "output_pcd_sha256": "fc764f230531c8cc88a325b7eeb7c674b5d51dcd3aa9707b71f241662fca000a",
+  "plane": {
+    "a": 0.017270034694839682,
+    "b": -0.020027387290039736,
+    "c_m": 0.011696665829670817
+  },
+  "height_definition": "vertical height z - (a*x + b*y + c_m), in metres",
+  "minimum_height_m": 0.1,
+  "maximum_height_m": 1.5,
+  "input_points": 2428085,
+  "retained_points": 417401,
+  "removed_ground_and_below_points": 203126,
+  "removed_high_points": 1807558,
+  "removed_nonfinite_points": 0,
+  "retained_point_bytes_verified": true,
+  "source_pcd_preserved": true,
+  "pgm_unchanged": true,
+  "coordinates_modified": false
+}

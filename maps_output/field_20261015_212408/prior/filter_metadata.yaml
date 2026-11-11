@@ -1,0 +1,6 @@
+state: filtered
+input_points: 1006669
+removed_points: 9039
+removed_voxels: 4534
+candidate_voxels: 47581
+ray_steps: 50733486

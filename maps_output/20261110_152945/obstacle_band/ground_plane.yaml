@@ -1,0 +1,5 @@
+a: 0.017270034694839682
+b: -0.020027387290039736
+c_m: 0.011696665829670817
+provenance: Recovered from the previously verified ground-plane fit in this session;
+  output PCD hash checked against the previous obstacle_band export.

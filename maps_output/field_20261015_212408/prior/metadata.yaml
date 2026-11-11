@@ -1,0 +1,25 @@
+source: /home/mage/navigation/nav_rm_final/maps_output/field_20261015_212408/pgo
+poses: PGO poses.txt
+frames: 162
+pcd_points: 163269
+free_cells: 29593
+occupied_cells: 10616
+unknown_cells: 55539
+ground_height_band:
+- -0.15
+- 0.1
+obstacle_height_band:
+- 0.1
+- 1.5
+initial_base_pose:
+- 0.06246181086192452
+- -0.2603870542642117
+- 0.0
+- 0.6059213594779267
+static_filter:
+  state: filtered
+  input_points: 1006669
+  removed_points: 9039
+  removed_voxels: 4534
+  candidate_voxels: 47581
+  ray_steps: 50733486
