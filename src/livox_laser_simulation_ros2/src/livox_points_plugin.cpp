@@ -160,9 +160,10 @@ namespace gazebo
             auto intensity = rayShape->GetRetro(pair.first);
 
             // Handle out-of-range data
-            if (range >= RangeMax())
+            if (intensity < 0 || range >= RangeMax())
             {
                 range = 0;
+                intensity = 0;
             }
             else if (range <= RangeMin())
             {

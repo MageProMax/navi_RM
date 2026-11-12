@@ -88,6 +88,7 @@ class AccumulatedScan(Node):
     def __init__(self):
         super().__init__('accumulated_scan')
         self.history=float(self.declare_parameter('history_seconds',1.).value)
+        self.cloud_topic=str(self.declare_parameter('cloud_topic','/fastlio2/body_cloud').value)
         self.period=float(self.declare_parameter('publish_period',.2).value)
         self.low=float(self.declare_parameter('min_height',.10).value)
         self.high=float(self.declare_parameter('max_height',.7).value)
@@ -128,7 +129,7 @@ class AccumulatedScan(Node):
         self.pub=self.create_publisher(LaserScan,'scan',qos_profile_sensor_data)
         self.clearing_pub=(self.create_publisher(PointCloud2,'clearing_cloud',qos_profile_sensor_data)
                            if self.clearing_enabled else None)
-        self.create_subscription(PointCloud2,'/fastlio2/body_cloud',self.pending.append,qos_profile_sensor_data)
+        self.create_subscription(PointCloud2,self.cloud_topic,self.pending.append,qos_profile_sensor_data)
         self.create_timer(.02,self.tick)
 
     def tick(self):

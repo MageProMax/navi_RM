@@ -161,7 +161,12 @@ void LivoxOdeMultiRayShape::UpdateCallback(void *_data, dGeomID _o1, dGeomID _o2
                     //      << " pose[" << hitCollision->GetWorldPose() << "]"
                     //      << "\n";
                     shape->SetLength(contact.depth);
-                    shape->SetRetro(hitCollision->GetLaserRetro());
+                    // Keep the nearest self hit as an occlusion, but flag it
+                    // so the sensor does not report its own chassis as an
+                    // external obstacle. A tilted chassis can project a few
+                    // millimetres outside the horizontal body filter.
+                    shape->SetRetro(hitCollision->GetModel() == rayCollision->GetModel()
+                                        ? -1.0 : hitCollision->GetLaserRetro());
                 }
             }
         }
@@ -187,67 +192,13 @@ void LivoxOdeMultiRayShape::AddRay(const ignition::math::Vector3d &_start,
 }
 void LivoxOdeMultiRayShape::Init()
 {
-    ignition::math::Vector3d start, end, axis;
-    double yawAngle, pitchAngle;
-    // ignition::math::Quaternion ray;
-    double yDiff;
-    double horzMinAngle, horzMaxAngle;
-    int horzSamples = 1;
-    // double horzResolution = 1.0;
-
-    double pDiff = 0;
-    int vertSamples = 1;
-    // double vertResolution = 1.0;
-    double vertMinAngle = 0;
-
-    double minRange, maxRange;
-
-    this->rayElem = this->sdf->GetElement("ray");
-    this->scanElem = this->rayElem->GetElement("scan");
-    this->horzElem = this->scanElem->GetElement("horizontal");
-    this->rangeElem = this->rayElem->GetElement("range");
-
-    if (this->scanElem->HasElement("vertical"))
-    {
-        this->vertElem = this->scanElem->GetElement("vertical");
-        vertMinAngle = this->vertElem->Get<double>("min_angle");
-        double vertMaxAngle = this->vertElem->Get<double>("max_angle");
-        vertSamples = this->vertElem->Get<unsigned int>("samples");
-        // vertResolution = this->vertElem->Get<double>("resolution");
-        pDiff = vertMaxAngle - vertMinAngle;
-    }
-
-    horzMinAngle = this->horzElem->Get<double>("min_angle");
-    horzMaxAngle = this->horzElem->Get<double>("max_angle");
-    horzSamples = this->horzElem->Get<unsigned int>("samples");
-    // horzResolution = this->horzElem->Get<double>("resolution");
-    yDiff = horzMaxAngle - horzMinAngle;
-
-    minRange = this->rangeElem->Get<double>("min");
-    maxRange = this->rangeElem->Get<double>("max");
-
-    //    this->offset = this->collisionParent->GetRelativePose();
-
-    // Create an array of ray collisions
-    //    for (unsigned int j = 0; j < (unsigned int)vertSamples; ++j)
-    //    {
-    //        for (unsigned int i = 0; i < (unsigned int)horzSamples; ++i)
-    //        {
-    //            yawAngle = (horzSamples == 1) ? 0 :
-    //                       i * yDiff / (horzSamples - 1) + horzMinAngle;
-    //
-    //            pitchAngle = (vertSamples == 1)? 0 :
-    //                         j * pDiff / (vertSamples - 1) + vertMinAngle;
-    //
-    //            // since we're rotating a unit x vector, a pitch rotation will now be
-    //            // around the negative y axis
-    //            ray.SetFromEuler(math::Vector3(0.0, -pitchAngle, yawAngle));
-    //            axis = this->offset.rot * ray * math::Vector3(1.0, 0.0, 0.0);
-    //
-    //            start = (axis * minRange) + this->offset.pos;
-    //            end = (axis * maxRange) + this->offset.pos;
-    //
-    //            this->AddRay(start, end);
-    //        }
-    //    }
+    // Gazebo stores the configured range limits in private base-class fields.
+    // GetRange() adds that minimum to the ODE distance measured from each ray's
+    // start; Update() uses the maximum to reset its length. Skipping base Init
+    // left those limits at 0/1000, shortening every return by the 0.1 m blind
+    // range and allowing no-hit rays to appear as valid distant returns.
+    MultiRayShape::Init();
+    // The Livox CSV pattern is added by LivoxPointsPlugin after initialization.
+    // Discard the regular scan grid constructed by the base implementation.
+    this->rays.clear();
 }

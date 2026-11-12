@@ -74,6 +74,7 @@ public:
             std::bind(&LIONode::lidarCB, this, std::placeholders::_1), sensor_options);
 
         m_body_cloud_pub = this->create_publisher<sensor_msgs::msg::PointCloud2>("body_cloud", 10000);
+        m_navigation_cloud_pub = this->create_publisher<sensor_msgs::msg::PointCloud2>("navigation_cloud", 10);
         m_world_cloud_pub = this->create_publisher<sensor_msgs::msg::PointCloud2>("world_cloud", 10000);
         m_path_pub = this->create_publisher<nav_msgs::msg::Path>("lio_path", 10000);
         m_odom_pub = this->create_publisher<nav_msgs::msg::Odometry>("lio_odom", 10000);
@@ -382,6 +383,16 @@ public:
             m_package.cloud, m_kf->x().r_il, m_kf->x().t_il);
         CloudType::Ptr body_cloud = m_builder->lidar_processor()->transformCloud(
             imu_cloud, m_node_config.r_bi, m_node_config.t_bi);
+        if (m_navigation_cloud_pub->get_subscription_count() > 0)
+        {
+            // Obstacle heights are relative to the CURRENT physical base. Keep
+            // roll/pitch leveling, but do not add the LIO heave relative to its
+            // initial height: that can lift a flat floor into the obstacle band.
+            const CloudType::Ptr navigation_cloud = m_builder->lidar_processor()->transformCloud(
+                body_cloud, r_cloud, V3D::Zero());
+            publishCloud(m_navigation_cloud_pub, navigation_cloud,
+                         m_node_config.body_cloud_frame, m_package.cloud_end_time);
+        }
         body_cloud=m_builder->lidar_processor()->transformCloud(body_cloud,r_cloud,t_cloud);
 
         publishCloud(m_body_cloud_pub, body_cloud, m_node_config.body_cloud_frame, m_package.cloud_end_time);
@@ -405,6 +416,7 @@ private:
     rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr m_imu_sub;
 
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr m_body_cloud_pub;
+    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr m_navigation_cloud_pub;
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr m_world_cloud_pub;
     rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr m_path_pub;
     rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr m_odom_pub;

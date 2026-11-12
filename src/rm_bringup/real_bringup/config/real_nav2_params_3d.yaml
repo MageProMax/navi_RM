@@ -284,10 +284,10 @@ global_costmap:
       obstacle_layer:
         plugin: "nav2_costmap_2d::ObstacleLayer"
         enabled: True
-        # Observed free rays may overwrite stale prior obstacles. NO_INFORMATION
-        # cells preserve the static layer because track_unknown_space is true.
-        combination_method: 0
-        # Only measured rays may remove prior obstacles, not the robot footprint.
+        # Preserve all prior-map occupancy. Rays clear only this layer's
+        # dynamic observations; FREE_SPACE cannot overwrite the static layer.
+        combination_method: 1  # Max
+        # The robot footprint must not clear prior-map occupancy either.
         footprint_clearing_enabled: False
         observation_sources: scan clearing_cloud
         scan:

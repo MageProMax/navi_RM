@@ -1,0 +1,22 @@
+# Colcon and Python generated files
+build/
+install/
+log/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.cache/
+.ipynb_checkpoints/
+# Local tooling and credentials
+.codex/
+.agents/
+.aws/
+.vscode/
+.env
+.env.*
+# Recorded sensor data and generated mapping runs
+rosbag2_*/
+*.db3
+*.mcap
+*.bag
+/maps_output/

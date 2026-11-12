@@ -101,8 +101,8 @@ class NavigationConsole(W.QMainWindow):
         if navigation_mode=='explore':
             self.mode.setCurrentIndex(self.mode.findData('explore'));self.file.clear();self.note('无先验地图模式：等待 SLAM 地图，目标由探索器自动生成')
         elif start_empty:
-            self.mode.setCurrentIndex(self.mode.findData('manual'));self.file.clear();self.loop.setChecked(False)
-            self.note('目标列表为空。请添加目标点或双击地图设置目标，点击开始后执行；多个点可选择按列表巡检。')
+            self.mode.setCurrentIndex(self.mode.findData('test'));self.file.clear();self.loop.setChecked(False)
+            self.note('目标列表为空。添加目标后点击开始，将从第一行起按顺序执行全部目标一遍；选中行仅用于编辑。')
         elif Path(default).is_file():self.load_file(default)
         self.explore_sub=node.create_subscription(String,'/exploration/status',self.receive_exploration,10)
     def build_ui(self):
@@ -121,7 +121,8 @@ class NavigationConsole(W.QMainWindow):
         split=W.QSplitter();layout.addWidget(split,1)
         left=W.QWidget();ll=W.QVBoxLayout(left);ll.setContentsMargins(0,0,12,0)
         config=W.QGroupBox('任务与配置');form=W.QFormLayout(config)
-        self.mode=W.QComboBox();self.mode.addItem('测试巡检 · 按列表执行','test');self.mode.addItem('正式决策 · 补给 / 占领','formal');self.mode.addItem('手动导航 · 单个目标','manual');self.mode.addItem('自动探索 · 无先验地图','explore');self.mode.addItem('探索到目标 · 逐段建图前往','explore_goal');form.addRow('运行方式',self.mode)
+        self.mode=W.QComboBox();self.mode.addItem('按列表导航 · 依次执行全部点','test');self.mode.addItem('正式决策 · 补给 / 占领','formal');self.mode.addItem('单点导航 · 仅执行选中行','manual');self.mode.addItem('自动探索 · 无先验地图','explore');self.mode.addItem('探索到目标 · 逐段建图前往','explore_goal');form.addRow('运行方式',self.mode)
+        self.execution_scope=W.QLabel('按表格顺序执行全部目标，选中行仅用于编辑。');self.execution_scope.setWordWrap(True);form.addRow('执行范围',self.execution_scope)
         self.file=W.QLineEdit();row=W.QHBoxLayout();row.addWidget(self.file);open_button=W.QPushButton('打开');open_button.clicked.connect(self.open_file);row.addWidget(open_button);form.addRow('目标文件',row)
         self.loop=W.QCheckBox('循环巡检');self.loop.setChecked(True);form.addRow(self.loop)
         self.wait=W.QDoubleSpinBox();self.wait.setRange(0,3600);self.wait.setValue(1);self.wait.setSuffix(' 秒');form.addRow('到点停留',self.wait)
@@ -154,6 +155,13 @@ class NavigationConsole(W.QMainWindow):
         self.applied=False
         mode=self.mode.currentData();self.table.setEnabled(mode!='explore')
         self.loop.setEnabled(mode=='test');self.wait.setEnabled(mode=='test');self.health.setEnabled(mode=='formal')
+        if mode=='test':
+            self.execution_scope.setText(f'按表格顺序执行全部 {self.table.rowCount()} 个点；选中行仅用于编辑。')
+        elif mode in ('manual','explore_goal'):
+            row=self.table.currentRow();item=self.table.item(row,0) if row>=0 else None
+            self.execution_scope.setText(f'只执行选中行：{item.text() if item else "尚未选中目标"}；其余目标不会执行。')
+        elif mode=='formal':self.execution_scope.setText('由比赛状态选择目标，不按表格顺序执行。')
+        else:self.execution_scope.setText('由探索器选择目标，表格标点不参与自动探索。')
         try:self.map_view.show_points([] if mode=='explore' else self.points())
         except ValueError:pass
     def points(self):

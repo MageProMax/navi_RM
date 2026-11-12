@@ -34,12 +34,22 @@ def generate_launch_description():
             'gui', default_value='false'),
         launch.actions.DeclareLaunchArgument(
             'use_rviz', default_value='true'),
+        launch.actions.DeclareLaunchArgument('use_nav_plan', default_value='true'),
+        launch.actions.DeclareLaunchArgument('ui_start_empty', default_value='false'),
+        launch.actions.DeclareLaunchArgument('obstacle_cloud_topic', default_value='/fastlio2/navigation_cloud'),
+        launch.actions.DeclareLaunchArgument(
+            'param_file', default_value=os.path.join(bringup_path, 'config', 'real_nav2_params_3d.yaml')),
+        launch.actions.DeclareLaunchArgument(
+            'lio_config', default_value=os.path.join(nav_path, 'config', 'lio_sim.yaml')),
+        launch.actions.DeclareLaunchArgument(
+            'rviz_config_file', default_value=os.path.join(bringup_path, 'rviz', 'nav_final.rviz')),
         launch.actions.DeclareLaunchArgument(
             'initial_pose_x', default_value='-1.96'),
         launch.actions.DeclareLaunchArgument(
             'initial_pose_y', default_value='-1.85'),
         launch.actions.DeclareLaunchArgument(
             'initial_pose_yaw', default_value='0.0'),
+        launch.actions.DeclareLaunchArgument('initial_pose_z', default_value='0.0'),
     ]
 
     gazebo = launch.actions.IncludeLaunchDescription(
@@ -53,6 +63,7 @@ def generate_launch_description():
             'initial_pose_x': LaunchConfiguration('initial_pose_x'),
             'initial_pose_y': LaunchConfiguration('initial_pose_y'),
             'initial_pose_yaw': LaunchConfiguration('initial_pose_yaw'),
+            'initial_pose_z': LaunchConfiguration('initial_pose_z'),
         }.items(),
     )
 
@@ -64,7 +75,12 @@ def generate_launch_description():
             'pcd_map': LaunchConfiguration('pcd_map'),
             'use_sim_time': 'true',
             'use_fast_lio': 'true',
-            'use_nav_plan': 'true',
+            'use_nav_plan': LaunchConfiguration('use_nav_plan'),
+            'ui_start_empty': LaunchConfiguration('ui_start_empty'),
+            'obstacle_cloud_topic': LaunchConfiguration('obstacle_cloud_topic'),
+            'param_file': LaunchConfiguration('param_file'),
+            'lio_config': LaunchConfiguration('lio_config'),
+            'rviz_config_file': LaunchConfiguration('rviz_config_file'),
             'navigation_mode': LaunchConfiguration('navigation_mode'),
             'pgo_params_file': LaunchConfiguration('pgo_params_file'),
             'localizer_backend': LaunchConfiguration('localizer_backend'),

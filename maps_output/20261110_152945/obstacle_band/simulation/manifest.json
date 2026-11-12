@@ -1,0 +1,36 @@
+{
+  "signature": "3b7dfb7ae48f94b5ead2477c875d4f1343eadb2aa51763fd001b565f29cce09a",
+  "source_map": "/home/mage/navigation/nav_rm_final/maps_output/20261110_152945/obstacle_band",
+  "source_hashes": {
+    "map.yaml": "1d65b97214177971b8fe6069a7960bb7597f2dd13db5beefaf3c33bd90fb302e",
+    "map.pcd": "fc764f230531c8cc88a325b7eeb7c674b5d51dcd3aa9707b71f241662fca000a",
+    "height_filter_metadata.json": "5b82d108664a8572283399c2c3d9455e960d19f7d4cecfafd2693013365c9f55",
+    "start_pose.env": "e41d0ec5ad973b813f22c68dbdfe2cc7403b0551d0ff672a2ee51b46cb55be7c",
+    "map_image": "b46f6f60b05dd7fdacc666145326418ff38bb2ca806fa8581df6d84f7f00620d",
+    "builder": "f94f95f127c13352b23752090b5c4d87b2867a969310187acca689d128d71d50"
+  },
+  "voxel_resolution_m": 0.05,
+  "voxel_count": 60458,
+  "triangle_count": 249072,
+  "initial_pose": [
+    -0.0123371396684,
+    -0.206142698425,
+    -0.00157476301732
+  ],
+  "spawn_z": 0.01,
+  "floor_plane": {
+    "a": 0.0,
+    "b": 0.0,
+    "c_m": 0.0
+  },
+  "source_map_ground_fit": {
+    "a": 0.017270034694839682,
+    "b": -0.020027387290039736,
+    "c_m": 0.011696665829670817
+  },
+  "scope": "Recorded obstacle-band voxel surface plus horizontal floor; approximate sensor/physics geometry",
+  "artifacts": {
+    "obstacles.stl": "1187c1cfb72c71c504abc130a321624f9b6a11e385c504861407defa7cd144f2",
+    "replica.world": "df2467357fded4abde189a176260abb651be82c9e7924553d23b92ba8536b149"
+  }
+}

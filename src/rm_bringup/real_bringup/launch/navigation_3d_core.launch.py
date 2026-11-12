@@ -52,6 +52,7 @@ def generate_launch_description():
         launch.actions.DeclareLaunchArgument('exploration_params_file', default_value=os.path.join(bringup_path, 'config', 'exploration.yaml')),
         launch.actions.DeclareLaunchArgument('use_ui', default_value='false'),
         launch.actions.DeclareLaunchArgument('ui_start_empty', default_value='false'),
+        launch.actions.DeclareLaunchArgument('obstacle_cloud_topic', default_value='/fastlio2/body_cloud'),
         launch.actions.DeclareLaunchArgument('patrol_mode', default_value='formal', choices=['formal', 'test']),
         launch.actions.DeclareLaunchArgument('patrol_file', default_value=PathJoinSubstitution([get_package_share_directory('nav_plan'), 'config', 'patrol', PythonExpression(["'custom_room_test.yaml' if '", LaunchConfiguration('patrol_mode'), "' == 'test' else 'custom_room.yaml'"])])),
         launch.actions.DeclareLaunchArgument('use_nav_plan', default_value='false'),
@@ -130,6 +131,7 @@ def generate_launch_description():
         parameters=[{
             # Filter body returns and fit the floor before slicing relative height.
             'ground_filter_enabled': True,
+            'cloud_topic': LaunchConfiguration('obstacle_cloud_topic'),
             'history_seconds': 0.0,
             'publish_period': 0.1,
             'minimum_valid_bins': 1,
@@ -158,6 +160,7 @@ def generate_launch_description():
         parameters=[{'history_seconds':0.0, 'publish_period':.1,
             'minimum_valid_bins':1, 'clearing_enabled':True,
             'ground_filter_enabled':True,
+            'cloud_topic':LaunchConfiguration('obstacle_cloud_topic'),
             'min_height':.10, 'max_height':1.5, 'use_sim_time':use_sim_time}],
         remappings=[('scan','/scan')])
 

@@ -11,10 +11,12 @@
                     </ros>
                     <output_type>sensor_msgs/LaserScan</output_type>
                     <frame_name>laser_link</frame_name>
-                    <visualize>true</visualize> 
+                    <visualize>false</visualize>
                 </plugin>
                 <always_on>true</always_on>
-                <visualize>true</visualize>
+                <!-- This is a debug-only planar scanner, not the MID360.
+                     Keep its topic available without showing misleading rays. -->
+                <visualize>false</visualize>
                 <update_rate>5</update_rate>
                 <pose>0 0 0 0 0 0</pose>
 								<!-- 激光传感器配置 -->

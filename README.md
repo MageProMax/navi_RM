@@ -54,7 +54,7 @@ ros2 launch sim_bringup sim_nav_3d_total.launch.py \
 **实机：先验地图导航**，将路径和初始位姿替换为当前场地配置：
 
 本次 `20261110_152945/obstacle_band` 地图沿用旧版 `start_prior.sh` 的启动方式，
-加载该地图和建图起点位姿，并打开空目标列表的手动导航界面：
+加载该地图和建图起点位姿，并打开空目标列表的导航界面，默认按表格顺序执行全部点一遍：
 
 ```bash
 conda activate ros2_env
@@ -64,6 +64,21 @@ bash maps_output/20261110_152945/obstacle_band/start_prior.sh start_lidar:=false
 ```
 
 根目录的 `bash start_real_prior_nav.sh` 会转发到同一脚本。
+当前实机场地的仿真复刻入口（先编译并加载环境）：
+
+```bash
+colcon build --packages-select ros2_livox_simulation rm_bnrobot_sim rm_bnrobot_nav sim_bringup
+source install/setup.bash
+ros2 run sim_bringup start_sim_prior_nav.sh gui:=true
+# 无界面自动验收：导航客户端发目标、真值误差、自旋、急停及运行参数一致性
+python src/rm_bringup/sim_bringup/test/real_prior_sim_smoke.py
+```
+
+仿真直接使用这份实机二维地图、PCD、高度裁剪记录和起点，从 PCD 生成独立的
+Gazebo 碰撞网格；首次启动生成，之后按文件校验值复用。导航参数、地面过滤、
+清除射线、动态车体包络和 CAN 编码仲裁与实机共用；仿真只替换传感器及执行端。
+使用方法、验收范围和几何近似见 [实机地图仿真验证](src/rm_bringup/sim_bringup/README.md)。
+
 二维规划和 GICP 定位分别使用 `obstacle_band/map.yaml` 和 `map.pcd`。
 定位器读取同目录的 `height_filter_metadata.json`，按预计地图位姿与拟合地面
 裁剪实时注册扫描，保持相对地面 0.10～1.50 m 的同一高度范围。
@@ -71,6 +86,7 @@ bash maps_output/20261110_152945/obstacle_band/start_prior.sh start_lidar:=false
 继续使用全量雷达数据计算里程计。移动该地图时须同时保留高度裁剪记录。
 动态避障同时发布 `/scan` 和只用于清除的 `/clearing_cloud`，利用真实地面、顶棚
 回波在障碍高度范围内的射线段清理残留占用和膨胀圈；缺测不当作空地。
+全局障碍层采用 Max 叠加：清除仅作用于动态障碍层，先验地图的占用及其膨胀保留。
 具体规则与离线验证见 [动态障碍清除](docs/dynamic_obstacle_clearing_20261110.md)。
 脚本使用建图起点和原朝向作为初始位姿。其他场地可按下面的参数启动：
 

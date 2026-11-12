@@ -67,7 +67,7 @@ def generate_launch_description():
                    '-entity', robot_name,
                    '-x', LaunchConfiguration('initial_pose_x'),
                    '-y', LaunchConfiguration('initial_pose_y'),
-                   '-z', '0',
+                   '-z', LaunchConfiguration('initial_pose_z'),
                    '-Y', LaunchConfiguration('initial_pose_yaw')],
     )
 
@@ -85,6 +85,7 @@ def generate_launch_description():
         initial_pose_x_arg,
         initial_pose_y_arg,
         initial_pose_yaw_arg,
+        launch.actions.DeclareLaunchArgument('initial_pose_z', default_value='0.0'),
         robot_state_node,
         gazebo_node,
         spawn_node,

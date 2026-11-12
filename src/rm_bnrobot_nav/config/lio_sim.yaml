@@ -31,6 +31,7 @@ nbg: 0.0001
 
 imu_init_num: 200
 imu_init_duration: 5.0
+imu_init_max_gap: 0.05
 imu_init_max_gyro: 0.05
 imu_init_max_gyro_std: 0.02
 # Gazebo contact dynamics produce substantially more vibration than the real
